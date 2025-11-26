@@ -3,9 +3,9 @@
 
 #include "llvm/Support/raw_ostream.h"
 
-// #define FIX
+#define FIX
 #include "dialect/cherry/IR/CherryDialect.cpp.inc"
-// #undef FIX
+#undef FIX
 
 namespace mlir::cherry {
 void CherryDialect::initialize()

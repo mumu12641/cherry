@@ -17,7 +17,7 @@ def Cherry_Dialect : Dialect{
 
   let extraClassDeclaration = [{
       void registerType();
-      // void registerOps();
+      void registerOps();
   }];
   
   let hasConstantMaterializer = 0;

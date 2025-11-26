@@ -11,8 +11,8 @@
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
 
-// #define FIX
-// #define GET_TYPEDEF_CLASSES
+#define FIX
+#define GET_TYPEDEF_CLASSES
 #include "dialect/cherry/IR/CherryTypes.cpp.inc"
 
 
@@ -21,7 +21,7 @@ void CherryDialect::registerType()
 {
     llvm::outs() << "register " << getDialectNamespace() << "  Type\n";
     addTypes<
-// #define GET_TYPEDEF_LIST
+#define GET_TYPEDEF_LIST
 #include "dialect/cherry/IR/CherryTypes.cpp.inc"
         >();
 }

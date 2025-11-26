@@ -4,10 +4,10 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/MLIRContext.h"
 
-// #define FIX
-// #define GET_TYPEDEF_CLASSES
+#define FIX
+#define GET_TYPEDEF_CLASSES
 #include "dialect/cherry/IR/CherryTypes.h.inc"
-// #undef FIX
+#undef FIX
 
 
 

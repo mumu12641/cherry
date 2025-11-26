@@ -29,6 +29,8 @@ def Cherry_CherryTensorType : Cherry_Type<"CherryTensor","cherry_tensor",[]>{
     let hasCustomAssemblyFormat = 1;
 }
 
-// def Cherry_AnyCherryTensor : Type<Cherry_CherryTensorType.predicate, "any cherry tensor">;
-
+def AnyCherryTensor : Type<And<[
+    CPred<"::mlir::isa<::mlir::cherry::CherryTensorType>($_self)">,
+    CPred<"::mlir::cast<::mlir::cherry::CherryTensorType>($_self).getShape().size() > 0">
+]>, "any cherry tensor with rank > 0">;
 #endif
