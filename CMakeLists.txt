@@ -1,0 +1,39 @@
+cmake_minimum_required(VERSION 3.15)
+project(cherry LANGUAGES C CXX)
+if(POLICY CMP0116)
+    cmake_policy(SET CMP0116 NEW)
+endif()
+if(POLICY CMP0114)
+    cmake_policy(SET CMP0114 NEW)
+endif()
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install")
+
+set(CMAKE_BUILD_TYPE "Debug" CACHE STRING " " FORCE)
+add_compile_options(-fPIC)
+add_compile_options(-fno-rtti)
+add_subdirectory(third_party)
+
+list(APPEND LLVM_CMAKE_DIR "${CMAKE_CURRENT_BINARY_DIR}/third_party/llvm-project/llvm/lib/cmake/llvm")
+list(APPEND MLIR_CMAKE_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/mlir")
+list(APPEND CMAKE_MODULE_PATH ${MLIR_CMAKE_DIR})
+list(APPEND CMAKE_MODULE_PATH ${LLVM_CMAKE_DIR})
+
+include(LLVMConfig)
+include(MLIRConfig)
+include(TableGen)
+include(AddLLVM)
+include(AddMLIR)
+
+include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(${MLIR_INCLUDE_DIRS})
+
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
+
+set(NS_MLIR_TRANSFORM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(NS_MLIR_TRANSFORM_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/cherry_include.mlir")
+
+add_subdirectory(core)
