@@ -8,6 +8,8 @@ include "mlir/IR/DialectBase.td"
 include "mlir/IR/Traits.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
+include "mlir/IR/CommonTypeConstraints.td"
+include "mlir/IR/CommonAttrConstraints.td"
 
 class Cherry_Type<string name, string typeMnemonic, list<Trait> traits = [],
                    string baseCppClass = "::mlir::Type">
@@ -33,4 +35,19 @@ def AnyCherryTensor : Type<And<[
     CPred<"::mlir::isa<::mlir::cherry::CherryTensorType>($_self)">,
     CPred<"::mlir::cast<::mlir::cherry::CherryTensorType>($_self).getShape().size() > 0">
 ]>, "any cherry tensor with rank > 0">;
+
+// 定义一个 Integer 类型约束
+def AnyIntegerType : Type<
+    CPred<"::llvm::isa<::mlir::IntegerType>($_self)">, 
+    "integer"
+>;
+
+def AnyCherryScalar : AnyTypeOf<[F32, F64, AnyIntegerType], "f32, f64, or integer">;
+
+// def AnyCherryScalar : Type<Or<[
+//     F32, 
+//     F64, 
+//     CPred<"::llvm::isa<::mlir::IntegerType>($_self)">
+// ]>, "f32, f64, or integer">;
+
 #endif

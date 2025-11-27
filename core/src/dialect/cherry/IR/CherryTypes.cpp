@@ -30,10 +30,16 @@ void CherryTensorType::print(::mlir::AsmPrinter& printer) const
 {
     printer << "<";
     printer << "[";
-    llvm::interleaveComma(getShape(), printer);
-    printer << "]";
-    printer << ", ";
+    for (auto dim : getShape()) {
+        if (dim < 0) {
+            printer << "?" << "x";
+        }
+        else {
+            printer << dim << "x";
+        }
+    }
     printer.printType(getElementType());
+    printer << "]";
     printer << ">";
 }
 
