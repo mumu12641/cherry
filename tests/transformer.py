@@ -52,4 +52,5 @@ B, Seq, Dim = 1, 4, 8
 model = SimpleTransformerBlock(d_model=Dim, d_ff=32)
 input_tensor = torch.randn(B, Seq, Dim)
 output = model(input_tensor)
+print(output)
 print(output.shape) # torch.Size([1, 4, 8])
