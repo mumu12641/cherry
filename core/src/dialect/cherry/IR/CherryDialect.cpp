@@ -1,6 +1,9 @@
 
 #include "dialect/cherry/IR/CherryDialect.h"
 
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Transforms/InliningUtils.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 #define FIX
@@ -10,7 +13,9 @@
 namespace mlir::cherry {
 void CherryDialect::initialize()
 {
-    llvm::outs() << "initializing12 " << getDialectNamespace() << "\n";
+    llvm::outs() << "initializing " << getDialectNamespace() << "\n";
+    registerType();
+    registerOps();
 }
 
 CherryDialect::~CherryDialect()

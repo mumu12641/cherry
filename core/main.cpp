@@ -1,6 +1,7 @@
 #include "dialect/cherry/IR/CherryDialect.h"
 #include "dialect/cherry/IR/CherryOps.h"
 #include "dialect/cherry/IR/CherryTypes.h"
+#include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -9,13 +10,21 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Verifier.h"
+#include "mlir/IR/Value.h"
+#include "mlir/Parser/Parser.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
+#include "mlir/Transforms/Passes.h"
 
-#include "llvm/Support/FileSystem.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <iostream>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+
 
 mlir::Value createTensorConst(mlir::OpBuilder& builder, mlir::MLIRContext* context,
                               llvm::ArrayRef<int64_t> shape, float initValue)
@@ -40,7 +49,7 @@ mlir::Value createI64Const(mlir::OpBuilder& builder, int64_t val)
 // ============================================================
 // 1. 构建 Transformer Block 函数 (定义计算图，参数为动态形状)
 // ============================================================
-mlir::func::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRContext& context)
+mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRContext& context)
 {
     auto loc     = builder.getUnknownLoc();
     auto f32Type = builder.getF32Type();
@@ -49,6 +58,8 @@ mlir::func::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRCon
     const int64_t D   = 8;
     const int64_t FF  = 32;
     const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
+
+    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
 
     // --- 定义参数类型 (Dynamic Shapes) ---
     // Input: [?, ?, 8]
@@ -70,11 +81,11 @@ mlir::func::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRCon
                                              typeWeightFF2,
                                              typeLnParam,
                                              typeLnParam},
-                                            {typeInput}   // Return type
+                                            {typeReturn}   // Return type
     );
 
-    auto funcOp = builder.create<mlir::func::FuncOp>(loc, "simple_transformer_block", funcType);
-    mlir::Block* entryBlock = funcOp.addEntryBlock();
+    auto funcOp = builder.create<mlir::cherry::FuncOp>(loc, "simple_transformer_block", funcType);
+    mlir::Block* entryBlock = &(funcOp.front());
     builder.setInsertionPointToStart(entryBlock);
 
     // 获取参数
@@ -147,7 +158,7 @@ mlir::func::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRCon
     auto final_output = builder.create<mlir::cherry::LayerNormOp>(
         loc, typeDyn3D, res2, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
 
-    builder.create<mlir::func::ReturnOp>(loc, mlir::ValueRange{final_output});
+    builder.create<mlir::cherry::ReturnOp>(loc, mlir::ValueRange{final_output});
 
     return funcOp;
 }
@@ -155,8 +166,7 @@ mlir::func::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRCon
 // ============================================================
 // 2. 构建 Main 函数 (定义具体数据，调用 Block)
 // ============================================================
-void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context,
-                                             mlir::func::FuncOp callee)
+void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context, mlir::cherry::FuncOp callee)
 {
     auto loc = builder.getUnknownLoc();
 
@@ -167,9 +177,9 @@ void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context,
     const int64_t FF = 32;
 
     auto funcType = builder.getFunctionType({}, {});   // main() -> void
-    auto funcOp   = builder.create<mlir::func::FuncOp>(loc, "main", funcType);
+    auto funcOp   = builder.create<mlir::cherry::FuncOp>(loc, "main", funcType);
 
-    mlir::Block* entryBlock = funcOp.addEntryBlock();
+    mlir::Block* entryBlock = &(funcOp.front());
     builder.setInsertionPointToStart(entryBlock);
 
     llvm::outs() << "Creating Concrete Tensors in Main...\n";
@@ -190,27 +200,29 @@ void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context,
 
     // 3. 调用 Transformer Block
     // CallOp 需要 Callee 的名字和输入参数
-    mlir::ValueRange args   = {input, w_q, w_k, w_v, w_ff1, w_ff2, gamma, beta};
-    auto             callOp = builder.create<mlir::func::CallOp>(loc, callee, args);
+    // mlir::Value args   = {input, w_q, w_k, w_v, w_ff1, w_ff2, gamma, beta};
+    llvm::SmallVector<mlir::Value, 8> args = {input, w_q, w_k, w_v, w_ff1, w_ff2, gamma, beta};
+    auto callOp = builder.create<mlir::cherry::CallOp>(loc, callee.getSymName(), args);
 
     // 4. 获取结果 (可选：打印结果或返回)
     // 这里我们只是演示调用，所以直接 Return
-    builder.create<mlir::func::ReturnOp>(loc);
+    builder.create<mlir::cherry::ReturnOp>(loc);
 }
 
 int main()
 {
     mlir::DialectRegistry registry;
     registry.insert<mlir::func::FuncDialect>();
-    registry.insert<mlir::cherry::CherryDialect>(); 
-    mlir::MLIRContext     context(registry);
+    registry.insert<mlir::cherry::CherryDialect>();
+
+    mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
     auto dialect = context.getOrLoadDialect<mlir::cherry::CherryDialect>();
     context.getOrLoadDialect<mlir::func::FuncDialect>();
 
-    dialect->registerType();
-    dialect->registerOps();
+    // dialect->registerType();
+    // dialect->registerOps();
 
     mlir::OpBuilder                   builder(&context);
     mlir::OwningOpRef<mlir::ModuleOp> module = mlir::ModuleOp::create(builder.getUnknownLoc());
@@ -219,6 +231,13 @@ int main()
     auto transformerFunc = buildTransformerBlock(builder, context);
     builder.setInsertionPointToEnd(module->getBody());
     buildMain(builder, context, transformerFunc);
+
+    // mlir::PassManager pm(&context);
+    // pm.addPass(mlir::createInlinerPass());
+    // if (mlir::failed(pm.run(*module))) {
+    //     llvm::errs() << "Inlining failed!\n";
+    //     return 1;
+    // }
 
     module->print(llvm::outs());
 

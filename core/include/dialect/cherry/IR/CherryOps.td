@@ -3,9 +3,11 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-// include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/Interfaces/FunctionInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
+include "mlir/Interfaces/CastInterfaces.td"
 include "dialect/cherry/IR/CherryTypes.td"
-// include "CherryTypes.td"
 
 class Cherry_Op<string mnemonic, list<Trait> traits = []>
     : Op<Cherry_Dialect, mnemonic, traits> {
@@ -78,7 +80,7 @@ def Cherry_ScalarDivOp : Cherry_ScalarBinaryOp<"scalar_div"> {
 
 
 class Cherry_BinaryTensorOp<string mnemonic, list<Trait> traits = []> 
-    : Cherry_Op<mnemonic, !listconcat([Pure], traits)> { // 默认都带 Pure
+    : Cherry_Op<mnemonic, !listconcat([Pure], traits)> {
   
   let arguments = (ins AnyCherryTensor:$lhs, AnyCherryTensor:$rhs);
   let results = (outs AnyCherryTensor:$result);
@@ -278,4 +280,82 @@ def Cherry_BroadcastOp : Cherry_Op<"broadcast", [Pure]> {
   let assemblyFormat = "$input `,` $target_shape attr-dict `:` `(` type($input) `,` type($target_shape) `)` `->` type($result)";
 }
 
+
+// others
+
+def CastOp : Cherry_Op<"cast", [
+     DeclareOpInterfaceMethods<CastOpInterface>,
+    //  DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+     Pure,
+     SameOperandsAndResultShape
+  ]> {
+  let summary = "cast operation";
+
+  let arguments = (ins AnyCherryTensor:$input);
+  let results = (outs AnyCherryTensor:$output);
+
+  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+}
+
+def FuncOp : Cherry_Op<"func", [FunctionOpInterface, IsolatedFromAbove]>{
+  let summary = "user defined function operation";
+
+  let arguments = (ins
+    SymbolNameAttr:$sym_name,
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs
+  );
+  let regions = (region AnyRegion:$body);
+
+  let builders = [OpBuilder<(ins
+    "StringRef":$name, "FunctionType":$type,
+    CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)
+  >];
+
+  let extraClassDeclaration = [{
+    //===------------------------------------------------------------------===//
+    // FunctionOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    /// Returns the argument types of this function.
+    ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
+
+    /// Returns the result types of this function.
+    ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
+
+    Region *getCallableRegion() { return &getBody(); }
+  }];
+  let hasCustomAssemblyFormat = 1;
+  let skipDefaultBuilders = 1;
+}
+
+def CallOp : Cherry_Op<"call",[DeclareOpInterfaceMethods<CallOpInterface>]> 
+{
+  let summary = "call operation";
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyCherryTensor>:$inputs);
+  let results = (outs AnyCherryTensor);
+  let assemblyFormat = [{
+    $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
+  }];
+  let builders = [
+    OpBuilder<(ins "StringRef":$callee, "ArrayRef<Value>":$arguments)>
+  ];
+}
+
+def ReturnOp : Cherry_Op<"return", [Pure, HasParent<"FuncOp">,
+                                 Terminator]> {
+  let summary = "return operation";
+  let arguments = (ins Variadic<AnyCherryTensor>:$input);
+  let assemblyFormat = "($input^ `:` type($input))? attr-dict ";
+  let builders = [
+    OpBuilder<(ins), [{ build($_builder, $_state, std::nullopt); }]>
+  ];
+  let extraClassDeclaration = [{
+    bool hasOperand() { return getNumOperands() != 0; }
+  }];
+
+  // Indicate that additional verification for this operation is necessary.
+  // let hasVerifier = 1;
+}
 #endif
