@@ -3,10 +3,9 @@
 
 // #include "dialect/cherry/IR/CherryDialect.h"
 // #include "dialect/cherry/IR/CherryTypes.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "interfaces/CherryInterface.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/SymbolTable.h"
@@ -20,4 +19,4 @@
 #include "dialect/cherry/IR/CherryOps.h.inc"
 #undef FIX
 
-#endif // DIALECT_CHERRY_OPS_H
+#endif   // DIALECT_CHERRY_OPS_H

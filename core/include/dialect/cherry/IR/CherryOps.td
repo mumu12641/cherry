@@ -8,6 +8,8 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "dialect/cherry/IR/CherryTypes.td"
+include "interfaces/CherryInterface.td"
+
 
 class Cherry_Op<string mnemonic, list<Trait> traits = []>
     : Op<Cherry_Dialect, mnemonic, traits> {
@@ -80,7 +82,7 @@ def Cherry_ScalarDivOp : Cherry_ScalarBinaryOp<"scalar_div"> {
 
 
 class Cherry_BinaryTensorOp<string mnemonic, list<Trait> traits = []> 
-    : Cherry_Op<mnemonic, !listconcat([Pure], traits)> {
+    : Cherry_Op<mnemonic, !listconcat([Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>], traits)> {
   
   let arguments = (ins AnyCherryTensor:$lhs, AnyCherryTensor:$rhs);
   let results = (outs AnyCherryTensor:$result);
@@ -89,7 +91,7 @@ class Cherry_BinaryTensorOp<string mnemonic, list<Trait> traits = []>
 }
 
 class Cherry_UnaryTensorOp<string mnemonic, list<Trait> traits = []> 
-    : Cherry_Op<mnemonic, !listconcat([Pure], traits)> {
+    : Cherry_Op<mnemonic, !listconcat([Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>], traits)> {
   
   let arguments = (ins AnyCherryTensor:$operand);
   let results = (outs AnyCherryTensor:$result);
@@ -213,7 +215,7 @@ def Cherry_ArgmaxOp : Cherry_ReductionOp<"argmax"> {
 //===----------------------------------------------------------------------===//
 
 // Reshape
-def Cherry_ReshapeOp : Cherry_Op<"reshape", [Pure]> {
+def Cherry_ReshapeOp : Cherry_Op<"reshape", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Reshape tensor without copying data";
   let description = [{
     Changes the shape of a tensor without reordering elements. Total number of elements must remain the same.
@@ -227,7 +229,7 @@ def Cherry_ReshapeOp : Cherry_Op<"reshape", [Pure]> {
   let assemblyFormat = "$input `,` $new_shape attr-dict `:` `(` type($input) `,` type($new_shape) `)` `->` type($result)";
 }
 
-def Cherry_TransposeOp : Cherry_Op<"transpose", [Pure]> {
+def Cherry_TransposeOp : Cherry_Op<"transpose", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Transpose tensor dimensions";
   let description = [{
     Swaps tensor dimensions according to a permutation.
@@ -247,7 +249,7 @@ def Cherry_TransposeOp : Cherry_Op<"transpose", [Pure]> {
 
 // 1. MatMul: 支持 Batch 的矩阵乘法
 // [B, M, K] * [B, K, N] -> [B, M, N]
-def Cherry_MatMulOp : Cherry_Op<"matmul", [Pure]> {
+def Cherry_MatMulOp : Cherry_Op<"matmul", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Batch matrix multiplication";
   let arguments = (ins AnyCherryTensor:$lhs, AnyCherryTensor:$rhs);
   let results = (outs AnyCherryTensor:$result);
@@ -255,7 +257,7 @@ def Cherry_MatMulOp : Cherry_Op<"matmul", [Pure]> {
 }
 
 // 2. Softmax: 指定轴进行 Softmax
-def Cherry_SoftmaxOp : Cherry_Op<"softmax", [Pure]> {
+def Cherry_SoftmaxOp : Cherry_Op<"softmax", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Softmax operation";
   let arguments = (ins AnyCherryTensor:$input, I64Attr:$axis);
   let results = (outs AnyCherryTensor:$result);
@@ -264,7 +266,7 @@ def Cherry_SoftmaxOp : Cherry_Op<"softmax", [Pure]> {
 
 // 3. LayerNorm: 层归一化
 // y = (x - mean) / sqrt(var + eps) * gamma + beta
-def Cherry_LayerNormOp : Cherry_Op<"layernorm", [Pure]> {
+def Cherry_LayerNormOp : Cherry_Op<"layernorm", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Layer normalization";
   let arguments = (ins AnyCherryTensor:$input, AnyCherryTensor:$gamma, AnyCherryTensor:$beta, F32Attr:$eps);
   let results = (outs AnyCherryTensor:$result);
@@ -273,7 +275,7 @@ def Cherry_LayerNormOp : Cherry_Op<"layernorm", [Pure]> {
 
 // 4. Broadcast: 将 Tensor 广播到新形状
 // 例如: [1] -> [128, 128]
-def Cherry_BroadcastOp : Cherry_Op<"broadcast", [Pure]> {
+def Cherry_BroadcastOp : Cherry_Op<"broadcast", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Broadcast tensor to new shape";
   let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$target_shape);
   let results = (outs AnyCherryTensor:$result);
@@ -285,7 +287,7 @@ def Cherry_BroadcastOp : Cherry_Op<"broadcast", [Pure]> {
 
 def CastOp : Cherry_Op<"cast", [
      DeclareOpInterfaceMethods<CastOpInterface>,
-    //  DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
      Pure,
      SameOperandsAndResultShape
   ]> {

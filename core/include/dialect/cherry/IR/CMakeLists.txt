@@ -8,6 +8,7 @@ set(LLVM_TARGET_DEFINITIONS CherryOps.td)
 mlir_tablegen(CherryOps.h.inc -gen-op-decls -dialect=cherry)
 mlir_tablegen(CherryOps.cpp.inc -gen-op-defs -dialect=cherry)
 
+
 add_public_tablegen_target(CherryDialectIncGen)
 
 

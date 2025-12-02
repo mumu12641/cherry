@@ -1,8 +1,8 @@
 #include "dialect/cherry/IR/CherryDialect.h"
 #include "dialect/cherry/IR/CherryOps.h"
 #include "dialect/cherry/IR/CherryTypes.h"
+#include "dialect/cherry/Transforms/Passes.h"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -60,11 +60,11 @@ mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRC
     const int64_t FF  = 32;
     const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
 
-    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
+    auto typeDynamic = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
 
     // --- 定义参数类型 (Dynamic Shapes) ---
     // Input: [?, ?, 8]
-    auto typeInput = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
+    auto typeInput = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
     // Weights: [8, 8] (固定)
     auto typeWeightAttn = mlir::cherry::CherryTensorType::get(&context, {D, D}, f32Type);
     // FFN Weights
@@ -99,27 +99,27 @@ mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRC
 
     // --- 内部类型推导 (为了演示，这里我们手动指定结果类型为 Dynamic) ---
     // 注意：在实际编译器中，这里通常需要 ShapeInferenceInterface
-    auto typeDyn3D    = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
-    auto typeDyn3D_FF = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, FF}, f32Type);
-    auto typeDynScore =
-        mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, Dyn}, f32Type);   // [B, S, S]
+    // auto typeDyn3D    = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
+    // auto typeDyn3D_FF = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, FF}, f32Type);
+    // auto typeDynScore =
+    //     mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, Dyn}, f32Type);   // [B, S, S]
 
     // 1. Self-Attention
-    auto q = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D, x, w_q);
-    auto k = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D, x, w_k);
-    auto v = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D, x, w_v);
+    auto q = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_q);
+    auto k = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_k);
+    auto v = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_v);
 
     // Transpose K
     auto p0 = createI64Const(builder, 0);
     auto p1 = createI64Const(builder, 2);
     auto p2 = createI64Const(builder, 1);
     // K^T shape: [?, 8, ?]
-    auto typeKTrans = mlir::cherry::CherryTensorType::get(&context, {Dyn, D, Dyn}, f32Type);
-    auto k_t =
-        builder.create<mlir::cherry::TransposeOp>(loc, typeKTrans, k, mlir::ValueRange{p0, p1, p2});
+    // auto typeKTrans = mlir::cherry::CherryTensorType::get(&context, {Dyn, D, Dyn}, f32Type);
+    auto k_t = builder.create<mlir::cherry::TransposeOp>(
+        loc, typeDynamic, k, mlir::ValueRange{p0, p1, p2});
 
     // Score
-    auto scores = builder.create<mlir::cherry::MatMulOp>(loc, typeDynScore, q, k_t);
+    auto scores = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, q, k_t);
 
     // Scale & Softmax
     // 注意：这里为了简单，我们假设 Broadcast
@@ -137,28 +137,28 @@ mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRC
         builder, 1);   // Batch (Runtime should handle mismatch if broadcast supports it)
     auto d1           = createI64Const(builder, 4);
     auto scale_tensor = builder.create<mlir::cherry::BroadcastOp>(
-        loc, typeDynScore, sqrt_dk, mlir::ValueRange{d0, d1, d1});
+        loc, typeDynamic, sqrt_dk, mlir::ValueRange{d0, d1, d1});
 
     auto scores_scaled =
-        builder.create<mlir::cherry::TensorDivOp>(loc, typeDynScore, scores, scale_tensor);
+        builder.create<mlir::cherry::TensorDivOp>(loc, typeDynamic, scores, scale_tensor);
     auto attn_weights = builder.create<mlir::cherry::SoftmaxOp>(
-        loc, typeDynScore, scores_scaled, builder.getI64IntegerAttr(2));
-    auto attn_out = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D, attn_weights, v);
+        loc, typeDynamic, scores_scaled, builder.getI64IntegerAttr(2));
+    auto attn_out = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, attn_weights, v);
 
     // 2. Add & Norm
-    auto res1  = builder.create<mlir::cherry::TensorAddOp>(loc, typeDyn3D, x, attn_out);
+    auto res1  = builder.create<mlir::cherry::TensorAddOp>(loc, typeDynamic, x, attn_out);
     auto norm1 = builder.create<mlir::cherry::LayerNormOp>(
-        loc, typeDyn3D, res1, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
+        loc, typeDynamic, res1, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
 
     // 3. FFN
-    auto ff1      = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D_FF, norm1, w_ff1);
-    auto ff1_relu = builder.create<mlir::cherry::TensorReluOp>(loc, typeDyn3D_FF, ff1);
-    auto ff2      = builder.create<mlir::cherry::MatMulOp>(loc, typeDyn3D, ff1_relu, w_ff2);
+    auto ff1      = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, norm1, w_ff1);
+    auto ff1_relu = builder.create<mlir::cherry::TensorReluOp>(loc, typeDynamic, ff1);
+    auto ff2      = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, ff1_relu, w_ff2);
 
     // 4. Add & Norm
-    auto res2         = builder.create<mlir::cherry::TensorAddOp>(loc, typeDyn3D, norm1, ff2);
+    auto res2         = builder.create<mlir::cherry::TensorAddOp>(loc, typeDynamic, norm1, ff2);
     auto final_output = builder.create<mlir::cherry::LayerNormOp>(
-        loc, typeDyn3D, res2, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
+        loc, typeDynamic, res2, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
 
     builder.create<mlir::cherry::ReturnOp>(loc, mlir::ValueRange{final_output});
 
@@ -180,7 +180,7 @@ void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context, mlir::cherr
     const int64_t FF  = 32;
     const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
 
-    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
+    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
 
 
     auto funcType = builder.getFunctionType({}, {typeReturn});   // main() -> void
@@ -233,16 +233,7 @@ int main()
     builder.setInsertionPointToEnd(module->getBody());
     buildMain(builder, context, transformerFunc);
 
-    module->print(llvm::outs());
 
-    mlir::PassManager pm(module.get()->getName());
-    pm.addPass(mlir::createInlinerPass());
-    if (mlir::failed(pm.run(*module))) {
-        llvm::errs() << "Inlining failed!\n";
-        return 1;
-    }
-
-    module->print(llvm::outs());
 
     std::string          filename = "/home/nx/ycy/pb/cherry/core/test.mlir";
     std::error_code      ec;
@@ -251,6 +242,17 @@ int main()
         llvm::errs() << "无法打开文件: " << ec.message() << "\n";
         return 1;
     }
+    module->print(fileStream);
+    mlir::PassManager pm(module.get()->getName());
+    pm.addPass(mlir::createInlinerPass());
+    mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
+    optPM.addPass(mlir::cherry::createShapeInferencePass());
+    
+    if (mlir::failed(pm.run(*module))) {
+        llvm::errs() << "Inlining failed!\n";
+        return 1;
+    }
+    fileStream << "*************after inliner*************\n";
     module->print(fileStream);
     llvm::outs() << "MLIR 代码已成功保存到: " << filename << "\n";
     return 0;

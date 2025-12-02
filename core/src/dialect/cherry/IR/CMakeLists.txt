@@ -17,5 +17,6 @@ add_mlir_dialect_library(CherryDialect
     MLIRPass
     MLIRSideEffectInterfaces
     MLIRTransforms
+    CherryDialectInterfaces
 )
 
