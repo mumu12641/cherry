@@ -14,6 +14,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
+#include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "llvm/ADT/StringRef.h"
@@ -81,10 +82,11 @@ mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRC
                                              typeWeightFF2,
                                              typeLnParam,
                                              typeLnParam},
-                                            {typeReturn}   // Return type
+                                            {typeInput}   // Return type
     );
 
     auto funcOp = builder.create<mlir::cherry::FuncOp>(loc, "simple_transformer_block", funcType);
+    funcOp.setPrivate();
     mlir::Block* entryBlock = &(funcOp.front());
     builder.setInsertionPointToStart(entryBlock);
 
@@ -232,12 +234,13 @@ int main()
     builder.setInsertionPointToEnd(module->getBody());
     buildMain(builder, context, transformerFunc);
 
-    // mlir::PassManager pm(&context);
-    // pm.addPass(mlir::createInlinerPass());
-    // if (mlir::failed(pm.run(*module))) {
-    //     llvm::errs() << "Inlining failed!\n";
-    //     return 1;
-    // }
+    
+    mlir::PassManager pm(module.get()->getName());
+    pm.addPass(mlir::createInlinerPass());
+    if (mlir::failed(pm.run(*module))) {
+        llvm::errs() << "Inlining failed!\n";
+        return 1;
+    }
 
     module->print(llvm::outs());
 

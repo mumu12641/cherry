@@ -9,5 +9,13 @@ add_mlir_dialect_library(CherryDialect
     LINK_LIBS PUBLIC
     MLIRIR
     MLIRTensorDialect
+    MLIRAnalysis
+    MLIRCastInterfaces
+    MLIRCallInterfaces
+    MLIRFunctionInterfaces
+    MLIRParser
+    MLIRPass
+    MLIRSideEffectInterfaces
+    MLIRTransforms
 )
 

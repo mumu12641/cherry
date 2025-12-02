@@ -17,11 +17,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Casting.h"
 
-#include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <string>
 
 #define GET_OP_CLASSES
@@ -45,6 +42,11 @@ struct CherryInlinerInterface : public DialectInlinerInterface
         for (const auto& it : llvm::enumerate(returnOp.getOperands()))
             valuesToRepl[it.index()].replaceAllUsesWith(it.value());
     }
+    Operation* materializeCallConversion(OpBuilder& builder, Value input, Type resultType,
+                                         Location conversionLoc) const final
+    {
+        return builder.create<CastOp>(conversionLoc, resultType, input);
+    }
 };
 
 void CherryDialect::registerOps()
@@ -55,6 +57,17 @@ void CherryDialect::registerOps()
 #include "dialect/cherry/IR/CherryOps.cpp.inc"
         >();
     addInterfaces<CherryInlinerInterface>();
+    
+    auto* inlinerInterface =
+        this->getRegisteredInterface<mlir::cherry::CherryInlinerInterface>();
+
+    if (inlinerInterface) {
+        llvm::errs() << "✅ Success: CherryInlinerInterface is registered correctly!\n";
+    }
+    else {
+        llvm::errs() << "❌ Failure: CherryInlinerInterface is NOT registered.\n";
+        llvm::errs() << "   Please check CherryDialect::initialize() in CherryDialect.cpp\n";
+    }
 }
 
 
@@ -66,7 +79,9 @@ void CallOp::build(mlir::OpBuilder& builder, mlir::OperationState& state, String
 {
     // Generic call always returns an unranked Tensor initially.
     state.addTypes(mlir::cherry::CherryTensorType::get(
-        builder.getContext(), {mlir::ShapedType::kDynamic}, builder.getF32Type()));
+        builder.getContext(),
+        {mlir::ShapedType::kDynamic, mlir::ShapedType::kDynamic, 8},
+        builder.getF32Type()));
     state.addOperands(arguments);
     state.addAttribute("callee", mlir::SymbolRefAttr::get(builder.getContext(), callee));
 }

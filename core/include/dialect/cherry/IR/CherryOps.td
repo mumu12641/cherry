@@ -297,7 +297,7 @@ def CastOp : Cherry_Op<"cast", [
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 }
 
-def FuncOp : Cherry_Op<"func", [FunctionOpInterface, IsolatedFromAbove]>{
+def FuncOp : Cherry_Op<"func", [Symbol ,FunctionOpInterface, IsolatedFromAbove]>{
   let summary = "user defined function operation";
 
   let arguments = (ins
