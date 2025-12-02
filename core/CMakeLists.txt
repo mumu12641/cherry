@@ -6,7 +6,6 @@ add_executable(cherry "main.cpp")
 target_link_libraries(cherry 
         CherryDialect 
         MLIRGPUDialect 
-        MLIRFuncDialect 
         MLIRAnalysis
         MLIRCastInterfaces
         MLIRCallInterfaces

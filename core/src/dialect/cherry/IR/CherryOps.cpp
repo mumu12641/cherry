@@ -37,6 +37,7 @@ struct CherryInlinerInterface : public DialectInlinerInterface
     bool isLegalToInline(Region*, Region*, bool, IRMapping&) const final { return true; }
     void handleTerminator(Operation* op, ValueRange valuesToRepl) const final
     {
+        llvm::outs() << "handleTerminator " << "\n";
         auto returnOp = cast<mlir::cherry::ReturnOp>(op);
         assert(returnOp.getNumOperands() == valuesToRepl.size());
         for (const auto& it : llvm::enumerate(returnOp.getOperands()))
@@ -45,6 +46,7 @@ struct CherryInlinerInterface : public DialectInlinerInterface
     Operation* materializeCallConversion(OpBuilder& builder, Value input, Type resultType,
                                          Location conversionLoc) const final
     {
+        llvm::outs() << "materializeCallConversion " << "\n";
         return builder.create<CastOp>(conversionLoc, resultType, input);
     }
 };
@@ -57,17 +59,6 @@ void CherryDialect::registerOps()
 #include "dialect/cherry/IR/CherryOps.cpp.inc"
         >();
     addInterfaces<CherryInlinerInterface>();
-    
-    auto* inlinerInterface =
-        this->getRegisteredInterface<mlir::cherry::CherryInlinerInterface>();
-
-    if (inlinerInterface) {
-        llvm::errs() << "✅ Success: CherryInlinerInterface is registered correctly!\n";
-    }
-    else {
-        llvm::errs() << "❌ Failure: CherryInlinerInterface is NOT registered.\n";
-        llvm::errs() << "   Please check CherryDialect::initialize() in CherryDialect.cpp\n";
-    }
 }
 
 

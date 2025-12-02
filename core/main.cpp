@@ -170,15 +170,20 @@ mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRC
 // ============================================================
 void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context, mlir::cherry::FuncOp callee)
 {
-    auto loc = builder.getUnknownLoc();
+    auto loc     = builder.getUnknownLoc();
+    auto f32Type = builder.getF32Type();
 
     // 定义具体的 Static Shapes
-    const int64_t B  = 1;
-    const int64_t S  = 4;
-    const int64_t D  = 8;
-    const int64_t FF = 32;
+    const int64_t B   = 1;
+    const int64_t S   = 4;
+    const int64_t D   = 8;
+    const int64_t FF  = 32;
+    const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
 
-    auto funcType = builder.getFunctionType({}, {});   // main() -> void
+    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
+
+
+    auto funcType = builder.getFunctionType({}, {typeReturn});   // main() -> void
     auto funcOp   = builder.create<mlir::cherry::FuncOp>(loc, "main", funcType);
 
     mlir::Block* entryBlock = &(funcOp.front());
@@ -208,23 +213,17 @@ void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context, mlir::cherr
 
     // 4. 获取结果 (可选：打印结果或返回)
     // 这里我们只是演示调用，所以直接 Return
-    builder.create<mlir::cherry::ReturnOp>(loc);
+    builder.create<mlir::cherry::ReturnOp>(loc, mlir::ValueRange{callOp});
 }
 
 int main()
 {
     mlir::DialectRegistry registry;
-    registry.insert<mlir::func::FuncDialect>();
     registry.insert<mlir::cherry::CherryDialect>();
-
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
     auto dialect = context.getOrLoadDialect<mlir::cherry::CherryDialect>();
-    context.getOrLoadDialect<mlir::func::FuncDialect>();
-
-    // dialect->registerType();
-    // dialect->registerOps();
 
     mlir::OpBuilder                   builder(&context);
     mlir::OwningOpRef<mlir::ModuleOp> module = mlir::ModuleOp::create(builder.getUnknownLoc());
@@ -234,7 +233,8 @@ int main()
     builder.setInsertionPointToEnd(module->getBody());
     buildMain(builder, context, transformerFunc);
 
-    
+    module->print(llvm::outs());
+
     mlir::PassManager pm(module.get()->getName());
     pm.addPass(mlir::createInlinerPass());
     if (mlir::failed(pm.run(*module))) {
