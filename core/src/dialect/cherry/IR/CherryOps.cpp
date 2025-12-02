@@ -21,6 +21,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <cassert>
@@ -253,11 +254,21 @@ void TransposeOp::inferShapes()
     auto                          elementType = inputType.getElementType();
     llvm::SmallVector<int64_t, 4> outputShape;
 
-    for (mlir::Value permVal : getPermutation()) {
-        llvm::APInt permIndex;
-        int64_t     idx = permIndex.getSExtValue();
-        assert(idx >= 0 && idx < (int64_t)inputShape.size());
-        outputShape.push_back(inputShape[idx]);
+    for (auto permVal : getPermutation()) {
+        if (auto constantOp = permVal.getDefiningOp<ConstantOp>()) {
+            mlir::Attribute attr = constantOp.getValue();
+            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+                int64_t index = intAttr.getInt();
+                assert(index >= 0 && index < (int64_t)inputShape.size());
+                outputShape.push_back(inputShape[index]);
+            }
+            else {
+                outputShape.push_back(mlir::ShapedType::kDynamic);
+            }
+        }
+        else {
+            outputShape.push_back(mlir::ShapedType::kDynamic);
+        }
     }
 
     auto resultType = mlir::cherry::CherryTensorType::get(getContext(), outputShape, elementType);
@@ -275,7 +286,7 @@ void MatMulOp::inferShapes()
     auto lhsShape = lhsType.getShape();
     auto rhsShape = rhsType.getShape();
 
-    assert(lhsShape.size() < 2 || rhsShape.size() < 2);
+    assert(lhsShape.size() >= 2 || rhsShape.size() >= 2);
 
     llvm::SmallVector<int64_t, 4> outputShape;
     size_t                        batchRank = lhsShape.size() - 2;
@@ -313,12 +324,21 @@ void BroadcastOp::inferShapes()
     auto       inputType   = cast<mlir::cherry::CherryTensorType>(getInput().getType());
     mlir::Type elementType = inputType.getElementType();
 
+    // TODO: now only for [1] -> [target]
+    assert(inputType.getShape().size() == 1);
+
     llvm::SmallVector<int64_t, 4> targetShapeDims;
 
-    for (mlir::Value dimVal : getTargetShape()) {
-        llvm::APInt dimConst;
-        if (mlir::matchPattern(dimVal, mlir::m_ConstantInt(&dimConst))) {
-            targetShapeDims.push_back(dimConst.getSExtValue());
+    for (auto dimVal : getTargetShape()) {
+        if (auto constantOp = dimVal.getDefiningOp<ConstantOp>()) {
+            mlir::Attribute attr = constantOp.getValue();
+            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+                int64_t dim = intAttr.getInt();
+                targetShapeDims.push_back(dim);
+            }
+            else {
+                targetShapeDims.push_back(mlir::ShapedType::kDynamic);
+            }
         }
         else {
             targetShapeDims.push_back(mlir::ShapedType::kDynamic);

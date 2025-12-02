@@ -2,8 +2,9 @@
 #define DIALECT_CHERRY_PASSES_TD
 
 include "mlir/Pass/PassBase.td"
+include "dialect/cherry/IR/CherryOps.td"
 
-def ShapeInferencePass : Pass<"ShapeInferencePass", "mlir::cherry::FuncOp">{
+def ShapeInferencePass : Pass<"cherry-shape-inference", "mlir::cherry::FuncOp">{
     let summary = "Tensor shape infer pass";
     let dependentDialects = [
         "::mlir::cherry::CherryDialect",

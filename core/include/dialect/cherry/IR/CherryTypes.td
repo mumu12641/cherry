@@ -29,6 +29,10 @@ def Cherry_CherryTensorType : Cherry_Type<"CherryTensor","cherry_tensor",[]>{
     );
 
     let hasCustomAssemblyFormat = 1;
+
+    let extraClassDeclaration = [{
+      bool isDynamic();
+    }];
 }
 
 def AnyCherryTensor : Type<And<[

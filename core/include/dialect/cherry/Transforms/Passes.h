@@ -2,6 +2,7 @@
 #define DIALECT_CHERRY_PASSES_H
 
 #include "dialect/cherry/IR/CherryDialect.h"
+#include "dialect/cherry/IR/CherryOps.h"
 #include "mlir/Pass/Pass.h"
 namespace mlir {
 namespace cherry {

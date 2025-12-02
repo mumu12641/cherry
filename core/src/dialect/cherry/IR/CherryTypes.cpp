@@ -26,6 +26,13 @@ void CherryDialect::registerType()
         >();
 }
 
+bool CherryTensorType::isDynamic()
+{
+    for (auto dim : getShape())
+        if (dim < 0) return true;
+    return false;
+}
+
 void CherryTensorType::print(::mlir::AsmPrinter& printer) const
 {
     printer << "<";

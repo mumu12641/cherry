@@ -6,5 +6,4 @@
 #define FIX
 #include "interfaces/CherryInterface.h.inc"
 #undef FIX
-
 #endif

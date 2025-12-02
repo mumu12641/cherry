@@ -245,8 +245,6 @@ int main()
     module->print(fileStream);
     mlir::PassManager pm(module.get()->getName());
     pm.addPass(mlir::createInlinerPass());
-    mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
-    optPM.addPass(mlir::cherry::createShapeInferencePass());
     
     if (mlir::failed(pm.run(*module))) {
         llvm::errs() << "Inlining failed!\n";
@@ -254,6 +252,17 @@ int main()
     }
     fileStream << "*************after inliner*************\n";
     module->print(fileStream);
+    
+    fileStream << "*************after type infer*************\n";
+    mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
+    optPM.addPass(mlir::cherry::createCherryShapeInferencePass());
+    
+    if (mlir::failed(pm.run(*module))) {
+        llvm::errs() << "type infer failed!\n";
+        return 1;
+    }
+    module->print(fileStream);
+    
     llvm::outs() << "MLIR 代码已成功保存到: " << filename << "\n";
     return 0;
 }
