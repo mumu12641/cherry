@@ -297,6 +297,7 @@ def CastOp : Cherry_Op<"cast", [
   let results = (outs AnyCherryTensor:$output);
 
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+  let hasCanonicalizer = 1; 
 }
 
 def FuncOp : Cherry_Op<"func", [Symbol ,FunctionOpInterface, IsolatedFromAbove]>{

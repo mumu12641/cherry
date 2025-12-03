@@ -25,6 +25,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <cassert>
+#include <cstdint>
 #include <string>
 
 #define GET_OP_CLASSES
@@ -98,8 +99,10 @@ MutableOperandRange CallOp::getArgOperandsMutable()
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::CastOp
 //===----------------------------------------------------------------------===//
-// void CastOp::inferShapes() { getResult().setType(getInput().getType()); }
-
+void CastOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
 bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs)
 {
     if (inputs.size() != 1 || outputs.size() != 1) return false;
@@ -108,7 +111,27 @@ bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs)
     if (!input || !output || input.getElementType() != output.getElementType()) return false;
     return true;
 }
+struct EraseIdentityCast : public mlir::OpRewritePattern<CastOp>
+{
+    using OpRewritePattern<CastOp>::OpRewritePattern;
 
+    mlir::LogicalResult matchAndRewrite(CastOp op, mlir::PatternRewriter& rewriter) const override
+    {
+        mlir::Value input  = op.getInput();
+        mlir::Value output = op.getOutput();
+        if (input.getType() == output.getType()) {
+            rewriter.replaceOp(op, input);
+            return mlir::success();
+        }
+        return mlir::failure();
+    }
+};
+
+void CastOp::getCanonicalizationPatterns(mlir::RewritePatternSet& results,
+                                         mlir::MLIRContext*       context)
+{
+    results.add<EraseIdentityCast>(context);
+}
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::FuncOp
 //===----------------------------------------------------------------------===//
@@ -230,16 +253,28 @@ void ReshapeOp::inferShapes()
     auto                          inputType   = cast<CherryTensorType>(getInput().getType());
     auto                          elementType = inputType.getElementType();
     llvm::SmallVector<int64_t, 4> newShapeDims;
-    for (auto shapeDim : getNewShape()) {
-        llvm::APInt dimValue;
-        if (mlir::matchPattern(shapeDim, mlir::m_ConstantInt(&dimValue))) {
-            int64_t dim = dimValue.getSExtValue();
-            newShapeDims.push_back(dim);
+    int64_t                       newShapes = 1;
+    int64_t                       shapes    = 1;
+    for (auto sh : inputType.getShape()) {
+        shapes *= sh;
+    }
+    for (auto newShape : getNewShape()) {
+        if (auto constantOp = newShape.getDefiningOp<ConstantOp>()) {
+            mlir::Attribute attr = constantOp.getValue();
+            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+                int64_t shape = intAttr.getInt();
+                newShapes *= shape;
+                newShapeDims.push_back(shape);
+            }
+            else {
+                newShapeDims.push_back(mlir::ShapedType::kDynamic);
+            }
         }
         else {
             newShapeDims.push_back(mlir::ShapedType::kDynamic);
         }
     }
+    assert(shapes == newShapes);
     auto resultType = CherryTensorType::get(getContext(), newShapeDims, elementType);
     getResult().setType(resultType);
 }
@@ -350,11 +385,4 @@ void BroadcastOp::inferShapes()
     getResult().setType(resultType);
 }
 
-//===----------------------------------------------------------------------===//
-// ::mlir::cherry::CastOp
-//===----------------------------------------------------------------------===//
-void CastOp::inferShapes()
-{
-    getResult().setType(getInput().getType());
-}
 }   // namespace mlir::cherry
