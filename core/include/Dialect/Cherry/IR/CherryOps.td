@@ -31,7 +31,7 @@ def Cherry_ConstantOp : Cherry_Op<"constant", [Pure]> {
       %1 = cherry.constant 42 : i32
   }];
 
-  let arguments = (ins AnyAttr:$value);
+  let arguments = (ins AnyConstantAttr:$value);
   let results = (outs AnyCherryScalar:$result);
   let assemblyFormat = "`(` $value `)` attr-dict `:` type($result)";
 }

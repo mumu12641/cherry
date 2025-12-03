@@ -52,22 +52,17 @@ void CherryTensorType::print(::mlir::AsmPrinter& printer) const
 
 Type CherryTensorType::parse(::mlir::AsmParser& parser)
 {
-    if (parser.parseLess()) return {};
-    llvm::SmallVector<int64_t> shape;
-    auto                       parseInt = [&]() -> ::mlir::ParseResult {
-        int64_t val;
-        if (parser.parseInteger(val)) return ::mlir::failure();
-        shape.push_back(val);
-        return ::mlir::success();
-    };
-    if (parser.parseCommaSeparatedList(::mlir::AsmParser::Delimiter::Square, parseInt)) {
-        return {};
+    if (parser.parseLess()) return Type();
+    if (parser.parseLSquare()) return Type();
+    SmallVector<int64_t> shape;
+    if (parser.parseDimensionList(shape, /*allowDynamic=*/true, /*withTrailingX=*/true)) {
+        return Type();
     }
-    if (parser.parseComma()) return {};
     Type elementType;
-    if (parser.parseType(elementType)) return {};
-    if (parser.parseGreater()) return {};
-    return parser.getChecked<CherryTensorType>(parser.getContext(), shape, elementType);
+    if (parser.parseType(elementType)) return Type();
+    if (parser.parseRSquare()) return Type();
+    if (parser.parseGreater()) return Type();
+    return get(parser.getContext(), shape, elementType);
 }
 
 

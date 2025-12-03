@@ -8,6 +8,9 @@ target_link_libraries(cherry
         CherryPasses
         CherryToLinalg
         MLIRGPUDialect 
+        MLIRArithDialect
+        MLIRFuncDialect
+        MLIRFuncAllExtensions
         MLIRAnalysis
         MLIRCastInterfaces
         MLIRCallInterfaces

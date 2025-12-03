@@ -1,8 +1,10 @@
+#include "Conversion/CherryToLinalg/CherryToLinalg.h"
 #include "Dialect/Cherry/IR/CherryDialect.h"
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
-#include "Conversion/CherryToLinalg/CherryToLinalg.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -27,259 +29,94 @@
 #include <system_error>
 #include <utility>
 
-
-mlir::Value createTensorConst(mlir::OpBuilder& builder, mlir::MLIRContext* context,
-                              llvm::ArrayRef<int64_t> shape, float initValue)
+// 辅助函数：运行 Pass 并在成功后打印到文件
+// 这样可以避免写很多重复的 if(failed) 代码
+bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
+                         llvm::raw_fd_ostream&                   fileStream,
+                         std::function<void(mlir::PassManager&)> addPassesFunc)
 {
-    auto    loc         = builder.getUnknownLoc();
-    auto    f32Type     = builder.getF32Type();
-    int64_t numElements = 1;
-    for (auto dim : shape) numElements *= dim;
-    std::vector<float> data(numElements, initValue);
-    auto               builtinType = mlir::RankedTensorType::get(shape, f32Type);
-    auto attr       = mlir::DenseElementsAttr::get(builtinType, llvm::ArrayRef<float>(data));
-    auto cherryType = mlir::cherry::CherryTensorType::get(context, shape, f32Type);
-    return builder.create<mlir::cherry::CreateTensorOp>(loc, cherryType, attr);
+
+    mlir::PassManager pm(module.getContext());
+    pm.enableVerifier();
+
+    addPassesFunc(pm);
+
+    if (mlir::failed(pm.run(module))) {
+        llvm::errs() << "Failed to run pass pipeline: " << phaseName << "\n";
+        return false;
+    }
+
+    fileStream << "\n// ==========================================\n";
+    fileStream << "// Phase: " << phaseName << "\n";
+    fileStream << "// ==========================================\n";
+    module.print(fileStream);
+    fileStream.flush();
+
+    return true;
 }
 
-mlir::Value createI64Const(mlir::OpBuilder& builder, int64_t val)
+int main(int argc, char** argv)
 {
-    return builder.create<mlir::cherry::ConstantOp>(
-        builder.getUnknownLoc(), builder.getI64Type(), builder.getI64IntegerAttr(val));
-}
-
-// ============================================================
-// 1. 构建 Transformer Block 函数 (定义计算图，参数为动态形状)
-// ============================================================
-mlir::cherry::FuncOp buildTransformerBlock(mlir::OpBuilder& builder, mlir::MLIRContext& context)
-{
-    auto loc     = builder.getUnknownLoc();
-    auto f32Type = builder.getF32Type();
-
-    // 定义常量：Hidden Size 固定，但 Batch 和 Seq 动态
-    const int64_t D   = 8;
-    const int64_t FF  = 32;
-    const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
-
-    auto typeDynamic = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
-
-    // --- 定义参数类型 (Dynamic Shapes) ---
-    // Input: [?, ?, 8]
-    auto typeInput = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
-    // Weights: [8, 8] (固定)
-    auto typeWeightAttn = mlir::cherry::CherryTensorType::get(&context, {D, D}, f32Type);
-    // FFN Weights
-    auto typeWeightFF1 = mlir::cherry::CherryTensorType::get(&context, {D, FF}, f32Type);
-    auto typeWeightFF2 = mlir::cherry::CherryTensorType::get(&context, {FF, D}, f32Type);
-    // LayerNorm Params
-    auto typeLnParam = mlir::cherry::CherryTensorType::get(&context, {D}, f32Type);
-
-    // --- 创建函数 ---
-    auto funcType = builder.getFunctionType({typeInput,
-                                             typeWeightAttn,
-                                             typeWeightAttn,
-                                             typeWeightAttn,
-                                             typeWeightFF1,
-                                             typeWeightFF2,
-                                             typeLnParam,
-                                             typeLnParam},
-                                            {typeInput}   // Return type
-    );
-
-    auto funcOp = builder.create<mlir::cherry::FuncOp>(loc, "simple_transformer_block", funcType);
-    funcOp.setPrivate();
-    mlir::Block* entryBlock = &(funcOp.front());
-    builder.setInsertionPointToStart(entryBlock);
-
-    // 获取参数
-    auto        args = entryBlock->getArguments();
-    mlir::Value x    = args[0];
-    mlir::Value w_q = args[1], w_k = args[2], w_v = args[3];
-    mlir::Value w_ff1 = args[4], w_ff2 = args[5];
-    mlir::Value ln_gamma = args[6], ln_beta = args[7];
-
-    // --- 内部类型推导 (为了演示，这里我们手动指定结果类型为 Dynamic) ---
-    // 注意：在实际编译器中，这里通常需要 ShapeInferenceInterface
-    // auto typeDyn3D    = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, D}, f32Type);
-    // auto typeDyn3D_FF = mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, FF}, f32Type);
-    // auto typeDynScore =
-    //     mlir::cherry::CherryTensorType::get(&context, {Dyn, Dyn, Dyn}, f32Type);   // [B, S, S]
-
-    // 1. Self-Attention
-    auto q = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_q);
-    auto k = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_k);
-    auto v = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, x, w_v);
-
-    // Transpose K
-    auto p0 = createI64Const(builder, 0);
-    auto p1 = createI64Const(builder, 2);
-    auto p2 = createI64Const(builder, 1);
-    // K^T shape: [?, 8, ?]
-    // auto typeKTrans = mlir::cherry::CherryTensorType::get(&context, {Dyn, D, Dyn}, f32Type);
-    auto k_t = builder.create<mlir::cherry::TransposeOp>(
-        loc, typeDynamic, k, mlir::ValueRange{p0, p1, p2});
-
-    // Score
-    auto scores = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, q, k_t);
-
-    // Scale & Softmax
-    // 注意：这里为了简单，我们假设 Broadcast
-    // 的目标形状由外部逻辑保证，或者我们在这里硬编码为运行时预期的形状
-    // 在完美的动态实现中，这里应该用 tensor.dim 获取 x 的维度。
-    // 这里为了代码跑通，我们先创建标量 sqrt_dk
-    auto sqrt_dk = createTensorConst(builder, &context, {1}, 2.8284f);
-
-    // 这是一个 Hack：为了演示，我们广播到一个非常大的动态范围，或者假设后端能处理
-    // 更好的做法是引入 DimOp，但为了不引入更多 Op，我们这里假设 Broadcast 接受动态 shape 定义
-    // 或者我们简单地只做除法（假设 tensor_div 支持标量广播，如果不支持，这里代码会比较复杂）
-    // 让我们假设 tensor_div 支持隐式广播，直接除以 sqrt_dk
-    // 如果不支持，我们需要 BroadcastOp，这里暂时用占位符
-    auto d0 = createI64Const(
-        builder, 1);   // Batch (Runtime should handle mismatch if broadcast supports it)
-    auto d1           = createI64Const(builder, 4);
-    auto scale_tensor = builder.create<mlir::cherry::BroadcastOp>(
-        loc, typeDynamic, sqrt_dk, mlir::ValueRange{d0, d1, d1});
-
-    auto scores_scaled =
-        builder.create<mlir::cherry::TensorDivOp>(loc, typeDynamic, scores, scale_tensor);
-    auto attn_weights = builder.create<mlir::cherry::SoftmaxOp>(
-        loc, typeDynamic, scores_scaled, builder.getI64IntegerAttr(2));
-    auto attn_out = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, attn_weights, v);
-
-    // 2. Add & Norm
-    auto res1  = builder.create<mlir::cherry::TensorAddOp>(loc, typeDynamic, x, attn_out);
-    auto norm1 = builder.create<mlir::cherry::LayerNormOp>(
-        loc, typeDynamic, res1, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
-
-    // 3. FFN
-    auto ff1      = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, norm1, w_ff1);
-    auto ff1_relu = builder.create<mlir::cherry::TensorReluOp>(loc, typeDynamic, ff1);
-    auto ff2      = builder.create<mlir::cherry::MatMulOp>(loc, typeDynamic, ff1_relu, w_ff2);
-
-    // 4. Add & Norm
-    auto res2         = builder.create<mlir::cherry::TensorAddOp>(loc, typeDynamic, norm1, ff2);
-    auto final_output = builder.create<mlir::cherry::LayerNormOp>(
-        loc, typeDynamic, res2, ln_gamma, ln_beta, builder.getF32FloatAttr(1e-5));
-
-    builder.create<mlir::cherry::ReturnOp>(loc, mlir::ValueRange{final_output});
-
-    return funcOp;
-}
-
-// ============================================================
-// 2. 构建 Main 函数 (定义具体数据，调用 Block)
-// ============================================================
-void buildMain(mlir::OpBuilder& builder, mlir::MLIRContext& context, mlir::cherry::FuncOp callee)
-{
-    auto loc     = builder.getUnknownLoc();
-    auto f32Type = builder.getF32Type();
-
-    // 定义具体的 Static Shapes
-    const int64_t B   = 1;
-    const int64_t S   = 4;
-    const int64_t D   = 8;
-    const int64_t FF  = 32;
-    const int64_t Dyn = mlir::ShapedType::kDynamic;   // 代表 '?'
-
-    auto typeReturn = mlir::cherry::CherryTensorType::get(&context, {Dyn}, f32Type);
-
-
-    auto funcType = builder.getFunctionType({}, {typeReturn});   // main() -> void
-    auto funcOp   = builder.create<mlir::cherry::FuncOp>(loc, "main", funcType);
-
-    mlir::Block* entryBlock = &(funcOp.front());
-    builder.setInsertionPointToStart(entryBlock);
-
-    llvm::outs() << "Creating Concrete Tensors in Main...\n";
-
-    // 1. 创建具体数据 (Inputs)
-    auto input = createTensorConst(builder, &context, {B, S, D}, 0.5f);   // Input X
-
-    // 2. 创建具体权重 (Weights)
-    auto w_q = createTensorConst(builder, &context, {D, D}, 0.1f);
-    auto w_k = createTensorConst(builder, &context, {D, D}, 0.1f);
-    auto w_v = createTensorConst(builder, &context, {D, D}, 0.1f);
-
-    auto w_ff1 = createTensorConst(builder, &context, {D, FF}, 0.2f);
-    auto w_ff2 = createTensorConst(builder, &context, {FF, D}, 0.2f);
-
-    auto gamma = createTensorConst(builder, &context, {D}, 1.0f);
-    auto beta  = createTensorConst(builder, &context, {D}, 0.0f);
-
-    // 3. 调用 Transformer Block
-    // CallOp 需要 Callee 的名字和输入参数
-    // mlir::Value args   = {input, w_q, w_k, w_v, w_ff1, w_ff2, gamma, beta};
-    llvm::SmallVector<mlir::Value, 8> args = {input, w_q, w_k, w_v, w_ff1, w_ff2, gamma, beta};
-    auto callOp = builder.create<mlir::cherry::CallOp>(loc, callee.getSymName(), args);
-
-    // 4. 获取结果 (可选：打印结果或返回)
-    // 这里我们只是演示调用，所以直接 Return
-    builder.create<mlir::cherry::ReturnOp>(loc, mlir::ValueRange{callOp});
-}
-
-int main()
-{
+    // 1. 注册 Dialects
     mlir::DialectRegistry registry;
     registry.insert<mlir::cherry::CherryDialect>();
+    registry.insert<mlir::arith::ArithDialect>();
+    registry.insert<mlir::func::FuncDialect>();
+    mlir::func::registerAllExtensions(registry);
+
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
-    auto dialect = context.getOrLoadDialect<mlir::cherry::CherryDialect>();
+    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/test.mlir";
+    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/test_output.mlir";
 
-    mlir::OpBuilder                   builder(&context);
-    mlir::OwningOpRef<mlir::ModuleOp> module = mlir::ModuleOp::create(builder.getUnknownLoc());
-    builder.setInsertionPointToEnd(module->getBody());
+    mlir::OwningOpRef<mlir::ModuleOp> module =
+        mlir::parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
 
-    auto transformerFunc = buildTransformerBlock(builder, context);
-    builder.setInsertionPointToEnd(module->getBody());
-    buildMain(builder, context, transformerFunc);
+    if (!module) {
+        llvm::errs() << "Error: Failed to parse input file: " << inputFilename << "\n";
+        return 1;
+    }
+    llvm::outs() << "Successfully parsed: " << inputFilename << "\n";
 
-
-
-    std::string          filename = "/home/nx/ycy/pb/cherry/core/test.mlir";
     std::error_code      ec;
-    llvm::raw_fd_ostream fileStream(filename, ec);
+    llvm::raw_fd_ostream fileStream(outputFilename, ec);
     if (ec) {
-        llvm::errs() << "无法打开文件: " << ec.message() << "\n";
+        llvm::errs() << "Error: Cannot open output file: " << ec.message() << "\n";
         return 1;
     }
-    module->print(fileStream);
-    mlir::PassManager pm(module.get()->getName());
-    pm.addPass(mlir::createInlinerPass());
 
-    if (mlir::failed(pm.run(*module))) {
-        llvm::errs() << "Inlining failed!\n";
+    fileStream << "// Original IR loaded from file\n";
+    module->print(fileStream);
+
+
+    // Phase 1: Inlining
+    if (!runPipelineAndPrint("Inliner", *module, fileStream, [](mlir::PassManager& pm) {
+            pm.addPass(mlir::createInlinerPass());
+        }))
         return 1;
-    }
-    fileStream << "*************after inliner*************\n";
-    module->print(fileStream);
 
-    fileStream << "*************after type infer*************\n";
-    mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
-    optPM.addPass(mlir::cherry::createCherryShapeInferencePass());
+    // // Phase 2: Type/Shape Inference
+    // if (!runPipelineAndPrint("Shape Inference", *module, fileStream, [](mlir::PassManager& pm) {
+    //         mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
+    //         optPM.addPass(mlir::cherry::createCherryShapeInferencePass());
+    //     }))
+    //     return 1;
 
-    if (mlir::failed(pm.run(*module))) {
-        llvm::errs() << "type infer failed!\n";
+    // // Phase 3: Canonicalizer
+    // if (!runPipelineAndPrint("Canonicalizer", *module, fileStream, [](mlir::PassManager& pm) {
+    //         pm.addPass(mlir::createCanonicalizerPass());
+    //     }))
+    //     return 1;
+
+
+    // Phase 4: Convert to Linalg (Example)
+    if (!runPipelineAndPrint("Convert to Linalg", *module, fileStream, [](mlir::PassManager& pm) {
+            pm.addPass(mlir::cherry::createConvertCherryToLinalgPass());
+        }))
         return 1;
-    }
-    module->print(fileStream);
 
-    fileStream << "*************after Canonicalizer Pass*************\n";
-    pm.addPass(mlir::createCanonicalizerPass());
-    if (mlir::failed(pm.run(*module))) {
-        llvm::errs() << "Canonicalizer pass failed!\n";
-        return 1;
-    }
-    module->print(fileStream);
-    fileStream << "*************after convert to linalg Pass*************\n";
 
-    pm.addPass(mlir::cherry::createConvertCherryToLinalgPass());
-    if (mlir::failed(pm.run(*module))) {
-        llvm::errs() << "convert to linalg  pass failed!\n";
-        return 1;
-    }
-    module->print(fileStream);
-
-    llvm::outs() << "MLIR code saved : " << filename << "\n";
+    llvm::outs() << "Processing complete. Output saved to: " << outputFilename << "\n";
     return 0;
 }

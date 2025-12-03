@@ -7,6 +7,7 @@ def ConvertCherryToLinalgPass : Pass<"convert-cherry-to-linalg", "mlir::ModuleOp
     let dependentDialects = [
         "::mlir::cherry::CherryDialect",
         "::mlir::linalg::LinalgDialect",
+        "::mlir::tensor::TensorDialect",
     ];
    // let constructor = "mlir::cherry::createConvertCherryToLinalgPass()";
 
