@@ -1,3 +1,3 @@
-add_subdirectory(dialect)
-add_subdirectory(interfaces)
-add_subdirectory(conversion)
+add_subdirectory(Dialect)
+add_subdirectory(Interfaces)
+add_subdirectory(Conversion)

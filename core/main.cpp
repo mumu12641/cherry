@@ -1,7 +1,8 @@
-#include "dialect/cherry/IR/CherryDialect.h"
-#include "dialect/cherry/IR/CherryOps.h"
-#include "dialect/cherry/IR/CherryTypes.h"
-#include "dialect/cherry/Transforms/Passes.h"
+#include "Dialect/Cherry/IR/CherryDialect.h"
+#include "Dialect/Cherry/IR/CherryOps.h"
+#include "Dialect/Cherry/IR/CherryTypes.h"
+#include "Dialect/Cherry/Transforms/Passes.h"
+#include "Conversion/CherryToLinalg/CherryToLinalg.h"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -267,6 +268,14 @@ int main()
     pm.addPass(mlir::createCanonicalizerPass());
     if (mlir::failed(pm.run(*module))) {
         llvm::errs() << "Canonicalizer pass failed!\n";
+        return 1;
+    }
+    module->print(fileStream);
+    fileStream << "*************after convert to linalg Pass*************\n";
+
+    pm.addPass(mlir::cherry::createConvertCherryToLinalgPass());
+    if (mlir::failed(pm.run(*module))) {
+        llvm::errs() << "convert to linalg  pass failed!\n";
         return 1;
     }
     module->print(fileStream);
