@@ -8,6 +8,7 @@ add_mlir_conversion_library(CherryToLinalg
   MLIRLinalgDialect
   MLIRArithDialect
   MLIRFuncDialect
+  MLIRMathDialect
   CherryDialect
   MLIRPass
   MLIRTransformUtils

@@ -2,9 +2,12 @@
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
 #include "Interfaces/CherryInterface.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Types.h"
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/CodeGen/RDFGraph.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -56,6 +59,7 @@ void ShapeInferencePass::runOnOperation()
         opWorklist.erase(op);
 
         if (auto shapeInferenceOp = llvm::dyn_cast<ShapeInference>(op)) {
+
             shapeInferenceOp.inferShapes();
         }
         else {
@@ -69,6 +73,16 @@ void ShapeInferencePass::runOnOperation()
             << opWorklist.size() << " operations couldn't be inferred\n";
         signalPassFailure();
     }
+
+    funcOp.walk([&](Operation* op) {
+        if (auto returnOp = llvm::dyn_cast<ReturnOp>(op)) {
+            auto returnType      = returnOp.getOperandTypes();
+            auto currentFuncType = funcOp.getResultTypes();
+            auto newFuncType     = FunctionType::get(
+                funcOp.getContext(), funcOp.getFunctionType().getInputs(), TypeRange{returnType});
+            funcOp.setType(newFuncType);
+        }
+    });
 }
 
 std::unique_ptr<mlir::Pass> mlir::cherry::createCherryShapeInferencePass()

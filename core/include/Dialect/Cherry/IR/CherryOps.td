@@ -154,61 +154,62 @@ def  Cherry_TensorTanhOp : Cherry_UnaryTensorOp<"tensor_tanh"> {
 // Tensor Reduction Operations 
 //===----------------------------------------------------------------------===//
 
-class Cherry_ReductionOp<string mnemonic> : Cherry_Op<mnemonic, [Pure]> {
-  let arguments = (ins AnyCherryTensor:$input, Optional<I64>:$axis);
-  let results = (outs AnyType:$result);
-  let assemblyFormat = "$input (`,` $axis^)? attr-dict `:` type($input) `->` type($result)";
-}
+// class Cherry_ReductionOp<string mnemonic> : Cherry_Op<mnemonic, [Pure]> {
+//   let arguments = (ins AnyCherryTensor:$input, Optional<I64>:$axis);
+//   let results = (outs AnyType:$result);
+//   let assemblyFormat = "$input (`,` $axis^)? attr-dict `:` type($input) `->` type($result)";
+// }
 
-// Sum
-def Cherry_SumOp : Cherry_ReductionOp<"sum"> {
-  let summary = "Tensor sum reduction";
-  let description = [{
-    Reduces a tensor by summing all elements (full reduction) or along a specific axis.
-    Example:
-      %sum = cherry.sum %tensor : !cherry.tensor<2x3xf32> -> f32
-  }];
-}
+// // Sum
+// def Cherry_SumOp : Cherry_ReductionOp<"sum"> {
+//   let summary = "Tensor sum reduction";
+//   let description = [{
+//     Reduces a tensor by summing all elements (full reduction) or along a specific axis.
+//     Example:
+//       %sum = cherry.sum %tensor : !cherry.tensor<2x3xf32> -> f32
+//   }];
+// }
 
-// Mean
-def Cherry_MeanOp : Cherry_ReductionOp<"mean"> {
-  let summary = "Tensor mean reduction";
-  let description = [{
-    Reduces a tensor by computing the mean of all elements.
-    Example:
-      %mean = cherry.mean %tensor : !cherry.tensor<2x3xf32> -> f32
-  }];
-}
+// // Mean
+// def Cherry_MeanOp : Cherry_ReductionOp<"mean"> {
+//   let summary = "Tensor mean reduction";
+//   let description = [{
+//     Reduces a tensor by computing the mean of all elements.
+//     Example:
+//       %mean = cherry.mean %tensor : !cherry.tensor<2x3xf32> -> f32
+//   }];
+// }
 
-// Max
-def Cherry_MaxReduceOp : Cherry_ReductionOp<"max_reduce"> { 
-  let summary = "Tensor max reduction";
-  let description = [{
-    Reduces a tensor by finding the maximum element.
-    Example:
-      %max = cherry.max_reduce %tensor : !cherry.tensor<2x3xf32> -> f32
-  }];
-}
+// // Max
+// def Cherry_MaxReduceOp : Cherry_ReductionOp<"max_reduce"> { 
+//   let summary = "Tensor max reduction";
+//   let description = [{
+//     Reduces a tensor by finding the maximum element.
+//     Example:
+//       %max = cherry.max_reduce %tensor : !cherry.tensor<2x3xf32> -> f32
+//   }];
+// }
 
-// Min
-def Cherry_MinReduceOp : Cherry_ReductionOp<"min_reduce"> { 
-  let summary = "Tensor min reduction";
-  let description = [{
-    Reduces a tensor by finding the minimum element.
-    Example:
-      %min = cherry.min_reduce %tensor : !cherry.tensor<2x3xf32> -> f32
-  }];
-}
 
-// Argmax
-def Cherry_ArgmaxOp : Cherry_ReductionOp<"argmax"> {
-  let summary = "Tensor argmax reduction";
-  let description = [{
-    Reduces a tensor by finding the index of the maximum element.
-    Example:
-      %idx = cherry.argmax %tensor : !cherry.tensor<2x3xf32> -> i64
-  }];
-}
+// // Min
+// def Cherry_MinReduceOp : Cherry_ReductionOp<"min_reduce"> { 
+//   let summary = "Tensor min reduction";
+//   let description = [{
+//     Reduces a tensor by finding the minimum element.
+//     Example:
+//       %min = cherry.min_reduce %tensor : !cherry.tensor<2x3xf32> -> f32
+//   }];
+// }
+
+// // Argmax
+// def Cherry_ArgmaxOp : Cherry_ReductionOp<"argmax"> {
+//   let summary = "Tensor argmax reduction";
+//   let description = [{
+//     Reduces a tensor by finding the index of the maximum element.
+//     Example:
+//       %idx = cherry.argmax %tensor : !cherry.tensor<2x3xf32> -> i64
+//   }];
+// }
 
 //===----------------------------------------------------------------------===//
 // Tensor Memory/Shape Operations 

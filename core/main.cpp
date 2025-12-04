@@ -4,8 +4,10 @@
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -57,18 +59,19 @@ bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
 
 int main(int argc, char** argv)
 {
-    // 1. 注册 Dialects
     mlir::DialectRegistry registry;
     registry.insert<mlir::cherry::CherryDialect>();
     registry.insert<mlir::arith::ArithDialect>();
     registry.insert<mlir::func::FuncDialect>();
+    registry.insert<mlir::linalg::LinalgDialect>();
+    registry.insert<mlir::math::MathDialect>();
     mlir::func::registerAllExtensions(registry);
 
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
-    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/test.mlir";
-    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/test_output.mlir";
+    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/test_transformer.mlir";
+    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/test_transformer_output.mlir";
 
     mlir::OwningOpRef<mlir::ModuleOp> module =
         mlir::parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
@@ -96,21 +99,21 @@ int main(int argc, char** argv)
         }))
         return 1;
 
-    // // Phase 2: Type/Shape Inference
-    // if (!runPipelineAndPrint("Shape Inference", *module, fileStream, [](mlir::PassManager& pm) {
-    //         mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
-    //         optPM.addPass(mlir::cherry::createCherryShapeInferencePass());
-    //     }))
-    //     return 1;
+    // Phase 2: Type/Shape Inference
+    if (!runPipelineAndPrint("Shape Inference", *module, fileStream, [](mlir::PassManager& pm) {
+            mlir::OpPassManager& optPM = pm.nest<mlir::cherry::FuncOp>();
+            optPM.addPass(mlir::cherry::createCherryShapeInferencePass());
+        }))
+        return 1;
 
-    // // Phase 3: Canonicalizer
-    // if (!runPipelineAndPrint("Canonicalizer", *module, fileStream, [](mlir::PassManager& pm) {
-    //         pm.addPass(mlir::createCanonicalizerPass());
-    //     }))
-    //     return 1;
+    // Phase 3: Canonicalizer
+    if (!runPipelineAndPrint("Canonicalizer", *module, fileStream, [](mlir::PassManager& pm) {
+            pm.addPass(mlir::createCanonicalizerPass());
+        }))
+        return 1;
 
 
-    // Phase 4: Convert to Linalg (Example)
+    // Phase 4: Convert to Linalg
     if (!runPipelineAndPrint("Convert to Linalg", *module, fileStream, [](mlir::PassManager& pm) {
             pm.addPass(mlir::cherry::createConvertCherryToLinalgPass());
         }))
