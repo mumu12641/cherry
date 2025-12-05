@@ -7,17 +7,9 @@ target_link_libraries(cherry
         CherryDialect 
         CherryPasses
         CherryToLinalg
-        # MLIRGPUDialect 
-        # MLIRArithDialect
-        # MLIRFuncDialect
         MLIRFuncAllExtensions
-        # MLIRMathDialect
-        MLIRAnalysis
-        MLIRCastInterfaces
-        MLIRCallInterfaces
-        MLIRFunctionInterfaces
-        MLIRIR
-        MLIRParser
-        MLIRPass
-        MLIRSideEffectInterfaces
-        MLIRTransforms)
+        
+        MLIRLinalgTransforms
+        
+        
+)

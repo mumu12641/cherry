@@ -10,8 +10,6 @@ class TypeConverter;
 
 namespace mlir::cherry {
 
-// std::unique_ptr<Pass> createConvertCherryToLinalgPass();
-
 #define GEN_PASS_DECL_CONVERTCHERRYTOLINALGPASS
 #include "Conversion/Passes.h.inc"
 

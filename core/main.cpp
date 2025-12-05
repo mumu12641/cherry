@@ -1,4 +1,5 @@
 #include "Conversion/CherryToLinalg/CherryToLinalg.h"
+#include "Conversion/CherryToLinalg/LinalgTiling.h"
 #include "Dialect/Cherry/IR/CherryDialect.h"
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
@@ -7,7 +8,9 @@
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -64,6 +67,7 @@ int main(int argc, char** argv)
     registry.insert<mlir::arith::ArithDialect>();
     registry.insert<mlir::func::FuncDialect>();
     registry.insert<mlir::linalg::LinalgDialect>();
+    registry.insert<mlir::scf::SCFDialect>();
     registry.insert<mlir::math::MathDialect>();
     mlir::func::registerAllExtensions(registry);
 
@@ -119,6 +123,19 @@ int main(int argc, char** argv)
         }))
         return 1;
 
+    // Phase 5: Linalg Tiling
+    if (!runPipelineAndPrint("Linalg Tiling", *module, fileStream, [](mlir::PassManager& pm) {
+            mlir::OpPassManager& optPM = pm.nest<mlir::func::FuncOp>();
+            optPM.addPass(mlir::createLinalgGeneralizeNamedOpsPass());
+            optPM.addPass(mlir::createLinalgElementwiseOpFusionPass());
+            optPM.addPass(mlir::cherry::createCherryLinalgTilingPass());
+            
+        }))
+        return 1;
+
+    if (!runPipelineAndPrint("test", *module, fileStream, [](mlir::PassManager& pm) {
+        }))
+        return 1;
 
     llvm::outs() << "Processing complete. Output saved to: " << outputFilename << "\n";
     return 0;
