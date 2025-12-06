@@ -11,5 +11,18 @@ target_link_libraries(cherry
         
         MLIRLinalgTransforms
         
+        MLIRMemRefDialect
+        MLIRAffineDialect
+        
+        MLIRBufferizationTransforms
+        MLIRBufferizationToMemRef
+        
+        MLIRSCFToControlFlow
+        MLIRMemRefToLLVM
+        MLIRMathToLLVM
+        MLIRArithToLLVM
+        MLIRFuncToLLVM
+        MLIRReconcileUnrealizedCasts
+        MLIRLLVMDialect
         
 )
