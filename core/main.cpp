@@ -102,8 +102,8 @@ int main(int argc, char** argv)
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
-    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/test_transformer.mlir";
-    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/test_transformer_output.mlir";
+    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/components/test_tensor_get_set.mlir";
+    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/components/test_tensor_get_set_output.mlir";
 
     mlir::OwningOpRef<mlir::ModuleOp> module =
         mlir::parseSourceFile<mlir::ModuleOp>(inputFilename, &context);

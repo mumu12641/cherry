@@ -169,6 +169,53 @@ void FuncOp::print(mlir::OpAsmPrinter& p)
                                                    getResAttrsAttrName());
 }
 
+
+// --------------------------------------------------------------------------
+// TensorGetOp Verifier
+// --------------------------------------------------------------------------
+LogicalResult TensorGetOp::verify() {
+    auto tensorType = cast<CherryTensorType>(getTensor().getType());
+    auto rank = tensorType.getShape().size();
+    
+    if (getIndices().size() != rank) {
+        return emitOpError("number of indices (") 
+               << getIndices().size() << ") must match the tensor rank (" << rank << ")";
+    }
+
+    Type elemType = tensorType.getElementType();
+    if (getResult().getType() != elemType) {
+        return emitOpError("result type ") << getResult().getType() 
+               << " must match tensor element type " << elemType;
+    }
+
+    return success();
+}
+
+// --------------------------------------------------------------------------
+// TensorSetOp Verifier
+// --------------------------------------------------------------------------
+LogicalResult TensorSetOp::verify() {
+    auto tensorType = cast<CherryTensorType>(getTensor().getType());
+    auto rank = tensorType.getShape().size();
+
+    if (getIndices().size() != rank) {
+        return emitOpError("number of indices (") 
+               << getIndices().size() << ") must match the tensor rank (" << rank << ")";
+    }
+
+    Type elemType = tensorType.getElementType();
+    if (getValue().getType() != elemType) {
+        return emitOpError("value type ") << getValue().getType() 
+               << " must match tensor element type " << elemType;
+    }
+
+    if (getResult().getType() != tensorType) {
+        return emitOpError("result tensor type must match input tensor type");
+    }
+
+    return success();
+}
+
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::TensorAddop
 //===----------------------------------------------------------------------===//
@@ -225,6 +272,14 @@ void TensorExpOp::inferShapes()
 // ::mlir::cherry::TensorReluOp
 //===----------------------------------------------------------------------===//
 void TensorReluOp::inferShapes()
+{
+    getResult().setType(getOperand().getType());
+}
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSiluOp
+//===----------------------------------------------------------------------===//
+void TensorSiluOp::inferShapes()
 {
     getResult().setType(getOperand().getType());
 }
@@ -385,4 +440,11 @@ void BroadcastOp::inferShapes()
     getResult().setType(resultType);
 }
 
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::RMSNormOp
+//===----------------------------------------------------------------------===//
+void RMSNormOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
 }   // namespace mlir::cherry

@@ -51,6 +51,41 @@ def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure]> {
   let assemblyFormat = "$value attr-dict `->` type($result)";
 }
 
+// =============================================================================
+// Tensor Get Op
+// =============================================================================
+def Cherry_TensorGetOp : Cherry_Op<"tensor_get", [Pure]> {
+  let summary = "Extracts an element from a tensor at the given indices";
+  let arguments = (ins 
+    AnyCherryTensor:$tensor,
+    Variadic<I64>:$indices
+  );
+
+  let results = (outs AnyType:$result);
+
+  let hasVerifier = 1;
+
+  let assemblyFormat = "$tensor `[` $indices `]` attr-dict `:` functional-type(operands, results)";
+}
+
+// =============================================================================
+// Tensor Set Op
+// =============================================================================
+def Cherry_TensorSetOp : Cherry_Op<"tensor_set", [Pure]> {
+  let summary = "Inserts an element into a tensor at the given indices";
+
+  let arguments = (ins 
+    AnyCherryTensor:$tensor,
+    Variadic<I64>:$indices,
+    AnyType:$value
+  );
+
+  let results = (outs AnyCherryTensor:$result);
+
+   let hasVerifier = 1;
+
+  let assemblyFormat = "$tensor `[` $indices `]` `,` $value attr-dict `:` functional-type(operands, results)";
+}
 
 // ===----------------------------------------------------------------------===//
 // Scalar Binary Operations (标量二元运算)
@@ -141,7 +176,11 @@ def Cherry_TensorExpOp : Cherry_UnaryTensorOp<"tensor_exp"> {
 def Cherry_TensorReluOp : Cherry_UnaryTensorOp<"tensor_relu"> {
   let summary = "Element-wise relu";
 }
-def  Cherry_TensorSigmoidOp : Cherry_UnaryTensorOp<"tensor_sigmoid"> {
+
+def Cherry_TensorSiluOp : Cherry_UnaryTensorOp<"tensor_silu"> {
+  let summary = "Element-wise silu";
+}
+def Cherry_TensorSigmoidOp : Cherry_UnaryTensorOp<"tensor_sigmoid"> {
   let summary = "Element-wise sigmoid";
 }
 
@@ -283,6 +322,12 @@ def Cherry_BroadcastOp : Cherry_Op<"broadcast", [Pure, DeclareOpInterfaceMethods
   let assemblyFormat = "$input `,` $target_shape attr-dict `:` `(` type($input) `,` type($target_shape) `)` `->` type($result)";
 }
 
+def Cherry_RMSNormOp : Cherry_Op<"rmsnorm", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Root mean square normalization";
+  let arguments = (ins AnyCherryTensor:$input, AnyCherryTensor:$scale, F32Attr:$epsilon);
+  let results = (outs AnyCherryTensor:$result);
+  let assemblyFormat = "$input `scale` $scale `eps` $epsilon attr-dict `:` type($input) `,` type($scale) `->` type($result)";
+}
 
 // others
 

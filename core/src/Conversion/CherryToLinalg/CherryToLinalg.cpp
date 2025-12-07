@@ -8,6 +8,8 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Utils/StructuredOpsUtils.h"
+#include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -75,6 +77,57 @@ struct CreateTensorOpLowering : public OpConversionPattern<CreateTensorOp>
         return success();
     }
 };
+
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::TensorGetOp lowering
+// ===----------------------------------------------------------------------===//
+struct TensorGetOpLowering : public OpConversionPattern<TensorGetOp>
+{
+    using OpConversionPattern<TensorGetOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(TensorGetOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto               loc     = op.getLoc();
+        auto               indices = adaptor.getIndices();
+        SmallVector<Value> indicesIndex;
+        for (auto indice : indices) {
+            Value indiceIndex =
+                rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), indice);
+            indicesIndex.push_back(indiceIndex);
+        }
+        rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, adaptor.getTensor(), indicesIndex);
+        return success();
+    }
+};
+
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::TensorSetOp lowering
+// ===----------------------------------------------------------------------===//
+struct TensorSetOpLowering : public OpConversionPattern<TensorSetOp>
+{
+    using OpConversionPattern<TensorSetOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(TensorSetOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto               loc     = op.getLoc();
+        auto               indices = adaptor.getIndices();
+        SmallVector<Value> indicesIndex;
+        for (auto indice : indices) {
+            Value indiceIndex =
+                rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), indice);
+            indicesIndex.push_back(indiceIndex);
+        }
+        rewriter.replaceOpWithNewOp<tensor::InsertOp>(op,
+                                                      adaptor.getValue(),    // scalar to insert
+                                                      adaptor.getTensor(),   // dest tensor
+                                                      indicesIndex           // indices
+        );
+        return success();
+    }
+};
+
 
 // ===----------------------------------------------------------------------===//
 // Generic Binary Scalar Op Lowering Template
@@ -192,7 +245,46 @@ struct TensorReluOpLowering : public OpConversionPattern<TensorReluOp>
         return success();
     }
 };
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::TensorSiluOp lowering
+// ===----------------------------------------------------------------------===//
+struct TensorSiluOpLowering : public OpConversionPattern<TensorSiluOp>
+{
+    using OpConversionPattern<TensorSiluOp>::OpConversionPattern;
 
+    LogicalResult matchAndRewrite(TensorSiluOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto inputType = cast<RankedTensorType>(adaptor.getOperand().getType());
+
+        Value initTensor = rewriter.create<tensor::EmptyOp>(
+            op.getLoc(), resultType.getShape(), resultType.getElementType());
+
+        SmallVector<AffineMap, 2> indexingMaps = {
+            rewriter.getMultiDimIdentityMap(inputType.getRank()),
+            rewriter.getMultiDimIdentityMap(resultType.getRank())};
+        SmallVector<utils::IteratorType> iteratorTypes(resultType.getRank(),
+                                                       utils::IteratorType::parallel);
+        rewriter.replaceOpWithNewOp<linalg::GenericOp>(
+            op,
+            TypeRange{resultType},
+            ValueRange{adaptor.getOperand()},
+            ValueRange{initTensor},
+            indexingMaps,
+            iteratorTypes,
+
+            [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value neg = builder.create<arith::NegFOp>(loc, args[0]);
+                Value exp = builder.create<math::ExpOp>(loc, neg);
+                Value den = builder.create<arith::AddFOp>(loc, args[0], exp);
+                Value res = builder.create<arith::DivFOp>(loc, args[0], den);
+                builder.create<linalg::YieldOp>(loc, res);
+            });
+        return success();
+    }
+};
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::TensorSigmoidOp lowering
 // ===----------------------------------------------------------------------===//
@@ -425,13 +517,131 @@ struct SoftmaxOpLowering : public OpConversionPattern<SoftmaxOp>
     LogicalResult matchAndRewrite(SoftmaxOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        auto resultType =
-            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        // auto resultType =
+        //     cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
 
-        Value initTensor = rewriter.create<tensor::EmptyOp>(
-            op.getLoc(), resultType.getShape(), resultType.getElementType());
-        rewriter.replaceOpWithNewOp<linalg::SoftmaxOp>(
-            op, TypeRange{resultType}, adaptor.getInput(), initTensor, op.getAxisAttr());
+        // Value initTensor = rewriter.create<tensor::EmptyOp>(
+        //     op.getLoc(), resultType.getShape(), resultType.getElementType());
+        // rewriter.replaceOpWithNewOp<linalg::SoftmaxOp>(
+        //     op, TypeRange{resultType}, adaptor.getInput(), initTensor, op.getAxisAttr());
+        Location loc   = op.getLoc();
+        Value    input = adaptor.getInput();
+        int64_t  axis  = op.getAxis();
+
+        auto inputType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getInput().getType()));
+        llvm::outs() << "inputType: " << inputType << "\n";
+        auto    elemType = inputType.getElementType();
+        int64_t rank     = inputType.getRank();
+
+        SmallVector<AffineExpr>          fullExprs;
+        SmallVector<AffineExpr>          reductionExprs;
+        SmallVector<utils::IteratorType> reductionIters;
+        SmallVector<utils::IteratorType> parallelIters;
+
+        for (int i = 0; i < rank; i++) {
+            fullExprs.push_back(rewriter.getAffineDimExpr(i));
+            parallelIters.push_back(utils::IteratorType::parallel);
+            if (i == axis) {
+                reductionIters.push_back(utils::IteratorType::reduction);
+            }
+            else {
+                reductionIters.push_back(utils::IteratorType::parallel);
+                reductionExprs.push_back(rewriter.getAffineDimExpr(i));
+            }
+        }
+        auto fullMap      = AffineMap::get(rank, 0, fullExprs, rewriter.getContext());
+        auto reductionMap = AffineMap::get(rank, 0, reductionExprs, rewriter.getContext());
+
+        // ---------------------------------------------------------
+        //  Max
+        // ---------------------------------------------------------
+        SmallVector<OpFoldResult> inputDims = tensor::getMixedSizes(rewriter, loc, input);
+        SmallVector<OpFoldResult> reducedDims;
+        for (int i = 0; i < rank; ++i) {
+            if (i != axis) reducedDims.push_back(inputDims[i]);
+        }
+
+        Value initMax = rewriter.create<tensor::EmptyOp>(loc, reducedDims, elemType);
+        Value negInf  = rewriter.create<arith::ConstantOp>(
+            loc, rewriter.getFloatAttr(elemType, -std::numeric_limits<double>::infinity()));
+        Value filledMax = rewriter.create<linalg::FillOp>(loc, negInf, initMax).getResult(0);
+
+        auto maxOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            filledMax.getType(),
+            ValueRange{input},
+            ValueRange{filledMax},
+            ArrayRef<AffineMap>{fullMap, reductionMap},
+            reductionIters,
+            [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value val = builder.create<arith::MaxNumFOp>(loc, args[0], args[1]);
+                builder.create<linalg::YieldOp>(loc, val);
+            });
+        Value maxVal = maxOp.getResult(0);
+
+
+        // ---------------------------------------------------------
+        //  Exp(Input - Max) (Element-wise)
+        // ---------------------------------------------------------
+        Value initExp = rewriter.create<tensor::EmptyOp>(loc, inputDims, elemType);
+
+        auto expOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            initExp.getType(),
+            ValueRange{input, maxVal},
+            ValueRange{initExp},
+            ArrayRef<AffineMap>{fullMap, reductionMap, fullMap},
+            parallelIters,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value in  = args[0];
+                Value max = args[1];
+                Value sub = b.create<arith::SubFOp>(loc, in, max);
+                Value exp = b.create<math::ExpOp>(loc, sub);
+                b.create<linalg::YieldOp>(loc, exp);
+            });
+        Value expVal = expOp.getResult(0);
+
+        // ---------------------------------------------------------
+        // Sum (Reduction)
+        // ---------------------------------------------------------
+        Value initSum = rewriter.create<tensor::EmptyOp>(loc, reducedDims, elemType);
+        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
+        Value filledSum = rewriter.create<linalg::FillOp>(loc, zero, initSum).getResult(0);
+
+        auto sumOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            filledSum.getType(),
+            ValueRange{expVal},
+            ValueRange{filledSum},
+            ArrayRef<AffineMap>{fullMap, reductionMap},
+            parallelIters,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value val = b.create<arith::AddFOp>(loc, args[0], args[1]);
+                b.create<linalg::YieldOp>(loc, val);
+            });
+        Value sumVal = sumOp.getResult(0);
+
+        // ---------------------------------------------------------
+        // Div (Exp / Sum) (Element-wise)
+        // ---------------------------------------------------------
+        Value initResult = rewriter.create<tensor::EmptyOp>(loc, inputDims, elemType);
+
+        auto divOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            initResult.getType(),
+            ValueRange{expVal, sumVal},
+            ValueRange{initResult},
+            ArrayRef<AffineMap>{fullMap, reductionMap, fullMap},
+            parallelIters,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value exp = args[0];
+                Value sum = args[1];
+                Value div = b.create<arith::DivFOp>(loc, exp, sum);
+                b.create<linalg::YieldOp>(loc, div);
+            });
+
+        rewriter.replaceOp(op, divOp.getResult(0));
         return success();
     }
 };
@@ -459,6 +669,138 @@ struct BroadcastOpLowering : public OpConversionPattern<BroadcastOp>
         }
         rewriter.replaceOpWithNewOp<linalg::BroadcastOp>(
             op, adaptor.getInput(), initTensor, rewriter.getDenseI64ArrayAttr(dims));
+        return success();
+    }
+};
+
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::RMSNormOp lowering
+// ===----------------------------------------------------------------------===//
+struct RMSNormOpLowering : public OpConversionPattern<RMSNormOp>
+{
+    using OpConversionPattern<RMSNormOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(RMSNormOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto loc = op.getLoc();
+
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto inputType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getInput().getType()));
+
+        auto input    = adaptor.getInput();
+        auto scale    = adaptor.getScale();
+        auto eps      = adaptor.getEpsilon();
+        auto rank     = inputType.getRank();
+        auto elemType = inputType.getElementType();
+
+        SmallVector<AffineExpr>          fullExprs;
+        SmallVector<AffineExpr>          reductionExprs;
+        SmallVector<utils::IteratorType> reductionIterators;
+        SmallVector<utils::IteratorType> parallelIterators;
+
+        for (int i = 0; i < rank; i++) {
+            fullExprs.push_back(rewriter.getAffineDimExpr(i));
+            parallelIterators.push_back(utils::IteratorType::parallel);
+            if (i == rank - 1) {
+                reductionIterators.push_back(utils::IteratorType::reduction);
+            }
+            else {
+                reductionExprs.push_back(rewriter.getAffineDimExpr(i));
+                reductionIterators.push_back(utils::IteratorType::parallel);
+            }
+        }
+        auto fullMap      = AffineMap::get(rank, 0, fullExprs, rewriter.getContext());
+        auto reductionMap = AffineMap::get(rank, 0, reductionExprs, rewriter.getContext());
+        auto scaleMap     = AffineMap::get(rank, 0, fullExprs.back(), rewriter.getContext());
+
+        SmallVector<OpFoldResult> inputDims = tensor::getMixedSizes(rewriter, loc, input);
+        SmallVector<OpFoldResult> reductionDims;
+        for (int i = 0; i < rank - 1; i++) {
+            reductionDims.push_back(inputDims[i]);
+        }
+
+        // ---------------------------------------------------------
+        // Sum(x ^ 2)
+        // ---------------------------------------------------------
+        Value initSum = rewriter.create<tensor::EmptyOp>(loc, reductionDims, elemType);
+        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
+        Value filledSum = rewriter.create<linalg::FillOp>(loc, zero, initSum).getResult(0);
+
+        auto sumSqOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            filledSum.getType(),
+            ValueRange{input},
+            ValueRange{filledSum},
+            ArrayRef<AffineMap>{fullMap, reductionMap},
+            reductionIterators,
+            [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value sum    = args[1];
+                Value x      = args[0];
+                Value xSq    = builder.create<arith::MulFOp>(loc, x, x);
+                Value newSum = builder.create<arith::AddFOp>(loc, sum, xSq);
+                builder.create<linalg::YieldOp>(loc, newSum);
+            });
+        auto sumSq = sumSqOp.getResult(0);
+
+
+        // ---------------------------------------------------------
+        // rsqrt =  1 / sqrt( sumSq / N + eps )
+        // ---------------------------------------------------------
+        Value lastDim    = rewriter.create<tensor::DimOp>(loc, input, rank - 1);
+        Value lastDimI64 = rewriter.create<arith::IndexCastOp>(loc, rewriter.getI64Type(), lastDim);
+        Value lastDimFloat = rewriter.create<arith::UIToFPOp>(loc, elemType, lastDimI64);
+        Value epsVal =
+            rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, eps));
+
+        SmallVector<AffineExpr>          rsqrtExprs;
+        SmallVector<utils::IteratorType> rsqrtIterators;
+
+        for (int i = 0; i < rank - 1; i++) {
+            rsqrtExprs.push_back(rewriter.getAffineDimExpr(i));
+            rsqrtIterators.push_back(utils::IteratorType::parallel);
+        }
+        auto rsqrtMap = AffineMap::get(rank - 1, 0, rsqrtExprs, rewriter.getContext());
+
+        Value initRsqrt = rewriter.create<tensor::EmptyOp>(loc, reductionDims, elemType);
+        auto  rsqrtOp   = rewriter.create<linalg::GenericOp>(
+            loc,
+            initRsqrt.getType(),
+            ValueRange{sumSq},
+            ValueRange{initRsqrt},
+            ArrayRef<AffineMap>{rsqrtMap, rsqrtMap},
+            rsqrtIterators,
+            [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value sumSqVal    = args[0];
+                Value mean        = builder.create<arith::DivFOp>(loc, sumSqVal, lastDimFloat);
+                Value meanPlusEps = builder.create<arith::AddFOp>(loc, mean, epsVal);
+                Value rsqrt       = builder.create<math::RsqrtOp>(loc, meanPlusEps);
+                builder.create<linalg::YieldOp>(loc, rsqrt);
+            });
+        auto rsqrt = rsqrtOp.getResult(0);
+
+        // ---------------------------------------------------------
+        // result = input * rsqrt * scale
+        // ---------------------------------------------------------
+        Value initResult = rewriter.create<tensor::EmptyOp>(loc, inputDims, elemType);
+        auto  finalOp    = rewriter.create<linalg::GenericOp>(
+            loc,
+            initResult.getType(),
+            ValueRange{input, rsqrt, scale},
+            ValueRange{initResult},
+            ArrayRef<AffineMap>{fullMap, reductionMap, scaleMap, fullMap},
+            parallelIterators,
+            [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value input      = args[0];
+                Value rsqrt      = args[1];
+                Value scale      = args[2];
+                Value normalized = builder.create<arith::MulFOp>(loc, input, rsqrt);
+                Value result     = builder.create<arith::MulFOp>(loc, normalized, scale);
+                builder.create<linalg::YieldOp>(loc, result);
+            });
+        rewriter.replaceOp(op, finalOp.getResult(0));
         return success();
     }
 };
@@ -579,6 +921,8 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
     target.addIllegalOp<cherry::ConstantOp>();
     target.addIllegalOp<cherry::CreateTensorOp>();
+    target.addIllegalOp<cherry::TensorGetOp>();
+    target.addIllegalOp<cherry::TensorSetOp>();
     target.addIllegalOp<cherry::ReturnOp>();
     target.addIllegalOp<cherry::FuncOp>();
     target.addIllegalOp<cherry::ScalarAddOp>();
@@ -593,18 +937,23 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::TensorExpOp>();
     target.addIllegalOp<cherry::TensorTanhOp>();
     target.addIllegalOp<cherry::TensorReluOp>();
+    target.addIllegalOp<cherry::TensorSiluOp>();
     target.addIllegalOp<cherry::TensorSigmoidOp>();
     target.addIllegalOp<cherry::TransposeOp>();
     target.addIllegalOp<cherry::ReshapeOp>();
     target.addIllegalOp<cherry::MatMulOp>();
     target.addIllegalOp<cherry::SoftmaxOp>();
     target.addIllegalOp<cherry::BroadcastOp>();
+    target.addIllegalOp<cherry::RMSNormOp>();
     target.addIllegalOp<cherry::CastOp>();
     target.addIllegalOp<cherry::CallOp>();
 
     RewritePatternSet patterns(&getContext());
     patterns.add<ConstantOpLowering,
                  CreateTensorOpLowering,
+                 TensorGetOpLowering,
+                 TensorSetOpLowering,
+
                  ScalarBinaryOpLowering<ScalarAddOp, arith::AddFOp, arith::AddIOp>,
                  ScalarBinaryOpLowering<ScalarSubOp, arith::SubFOp, arith::SubIOp>,
                  ScalarBinaryOpLowering<ScalarMulOp, arith::MulFOp, arith::MulIOp>,
@@ -618,6 +967,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  TensorUnaryOpLowering<TensorExpOp, linalg::ExpOp>,
                  TensorUnaryOpLowering<TensorTanhOp, linalg::TanhOp>,
                  TensorReluOpLowering,
+                 TensorSiluOpLowering,
                  TensorSigmoidOpLowering,
 
                  TransposeOpLowering,
@@ -626,6 +976,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  MatMulOpLowering,
                  SoftmaxOpLowering,
                  BroadcastOpLowering,
+                 RMSNormOpLowering,
 
                  CastOpLowering,
                  CallOpLowering,
