@@ -7,14 +7,32 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Utils/StructuredOpsUtils.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/TypeRange.h"
+// 核心转换框架
+#include "mlir/Transforms/DialectConversion.h"
+
+// [关键] SCF 结构化转换模式 (populateSCFStructuralTypeConversionsAndLegality)
+#include "mlir/Dialect/SCF/Transforms/Patterns.h"
+
+// 用于 Materialization (UnrealizedConversionCastOp)
+#include "mlir/IR/BuiltinOps.h"
+
+// 涉及到的标准 Dialects
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -1098,6 +1116,55 @@ struct FuncOpLowering : public OpConversionPattern<FuncOp>
     }
 };
 
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::PrintOp Lowering
+// ===----------------------------------------------------------------------===//
+struct PrintOpLowering : public OpConversionPattern<PrintOp>
+{
+    using OpConversionPattern<PrintOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(PrintOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        ModuleOp module = op->getParentOfType<ModuleOp>();
+        Value    input  = adaptor.getInput();   // 已经是 tensor<...> 类型了
+
+        // 我们统一使用 unranked tensor 作为打印函数的参数，
+        // 这样同一个打印函数可以处理所有形状。
+        // 在 Bufferization 后，这会变成 UnrankedMemRef。
+        auto tensorType         = cast<RankedTensorType>(input.getType());
+        auto unrankedTensorType = UnrankedTensorType::get(tensorType.getElementType());
+
+        // 1. 获取或创建打印函数的声明
+        // 函数签名: (tensor<*xf32>) -> ()
+        std::string funcName = "print_memref_f32";
+        // 如果是 int64，可以用 "print_memref_i64"
+
+        if (!module.lookupSymbol<func::FuncOp>(funcName)) {
+            OpBuilder::InsertionGuard guard(rewriter);
+            rewriter.setInsertionPointToStart(module.getBody());
+
+            auto funcType = rewriter.getFunctionType({unrankedTensorType}, {});
+            auto funcOp   = rewriter.create<func::FuncOp>(module.getLoc(), funcName, funcType);
+            funcOp.setPrivate();
+
+            funcOp.setArgAttr(0, "bufferization.access", rewriter.getStringAttr("read"));
+        }
+
+        // 2. 将 Ranked Tensor Cast 为 Unranked Tensor
+        // 这一步是为了匹配函数签名
+        Value unrankedInput =
+            rewriter.create<tensor::CastOp>(op.getLoc(), unrankedTensorType, input);
+
+        // 3. 创建 Call Op
+        rewriter.replaceOpWithNewOp<func::CallOp>(
+            op, funcName, TypeRange{}, ValueRange{unrankedInput});
+
+        return success();
+    }
+};
+
+
 struct ConvertCherryToLinalgPass
     : mlir::cherry::impl::ConvertCherryToLinalgPassBase<ConvertCherryToLinalgPass>
 {
@@ -1118,11 +1185,12 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addLegalDialect<linalg::LinalgDialect,
                            func::FuncDialect,
                            tensor::TensorDialect,
-                           CherryDialect,
                            arith::ArithDialect,
                            math::MathDialect>();
+    target.addLegalDialect<scf::SCFDialect>();   // 先设为 legal，然后下面添加动态规则覆盖它
+    target.addDynamicallyLegalDialect<scf::SCFDialect>(
+        [&](Operation* op) { return converter.isLegal(op); });
 
-    // target.addIllegalDialect<CherryDialect>();
 
     target.addIllegalOp<cherry::ConstantOp>();
     target.addIllegalOp<cherry::CreateTensorOp>();
@@ -1155,6 +1223,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::RMSNormOp>();
     target.addIllegalOp<cherry::CastOp>();
     target.addIllegalOp<cherry::CallOp>();
+    target.addIllegalOp<cherry::PrintOp>();
 
     RewritePatternSet patterns(&getContext());
     patterns.add<ConstantOpLowering,
@@ -1192,7 +1261,9 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  CastOpLowering,
                  CallOpLowering,
                  ReturnOpLowering,
-                 FuncOpLowering>(converter, &getContext());
+                 FuncOpLowering,
+                 PrintOpLowering>(converter, &getContext());
+    scf::populateSCFStructuralTypeConversionsAndLegality(converter, patterns, target);
 
     if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
         signalPassFailure();

@@ -4,15 +4,18 @@
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
-#include "mlir/Conversion/Passes.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Affine/IR/ValueBoundsOpInterfaceImpl.h"
+#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
@@ -25,6 +28,7 @@
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
@@ -40,15 +44,19 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/raw_ostream.h"
-// [新增] 引入命令行和路径处理的头文件
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <memory>
 #include <string>
@@ -57,9 +65,7 @@
 
 // [新增] 定义命令行参数
 namespace cl = llvm::cl;
-static cl::opt<std::string> inputFilename(cl::Positional, 
-                                          cl::desc("<input file>"), 
-                                          cl::Required);
+static cl::opt<std::string> inputFilename(cl::Positional, cl::desc("<input file>"), cl::Required);
 
 bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
                          llvm::raw_fd_ostream&                   fileStream,
@@ -100,6 +106,9 @@ int main(int argc, char** argv)
                     mlir::memref::MemRefDialect,
                     mlir::bufferization::BufferizationDialect,
                     mlir::affine::AffineDialect>();
+    mlir::registerLLVMDialectTranslation(registry);
+    mlir::registerBuiltinDialectTranslation(registry);
+
 
     mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
@@ -114,14 +123,9 @@ int main(int argc, char** argv)
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
-    // [修改] 移除硬编码路径，使用命令行参数
-    // inputFilename 变量由 cl::opt 自动填充
-    
-    // [新增] 自动生成输出文件名逻辑
-    // 例如输入: /path/to/test.mlir -> 输出: /path/to/test_output.mlir
     llvm::SmallString<128> outputBuffer(inputFilename);
-    llvm::sys::path::replace_extension(outputBuffer, ""); // 去掉原扩展名 (.mlir)
-    std::string outputFilename = outputBuffer.str().str() + "_output.mlir"; // 加上新后缀
+    llvm::sys::path::replace_extension(outputBuffer, "");
+    std::string outputFilename = outputBuffer.str().str() + "_output.mlir";
 
     mlir::OwningOpRef<mlir::ModuleOp> module =
         mlir::parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
@@ -184,6 +188,7 @@ int main(int argc, char** argv)
 
             mlir::bufferization::OneShotBufferizationOptions options;
             options.bufferizeFunctionBoundaries = true;
+            options.allowReturnAllocsFromLoops  = true;
             pm.addPass(mlir::bufferization::createOneShotBufferizePass(options));
 
             pm.addPass(mlir::createCanonicalizerPass());
@@ -197,20 +202,44 @@ int main(int argc, char** argv)
         }))
         return 1;
     if (!runPipelineAndPrint("lower to llvm", *module, fileStream, [](mlir::PassManager& pm) {
-            // 1. SCF -> Control Flow (Branch/Jump)
+            // memref.subview / memref -> base pointer, aligned pointer, offset, sizes, strides
+            pm.addPass(mlir::memref::createExpandStridedMetadataPass());
+
+            // lower affine
+            pm.addPass(mlir::createLowerAffinePass());
+
+            // SCF ->  Basic Blocks & Branch
             pm.addPass(mlir::createConvertSCFToCFPass());
-            // 2. MemRef -> LLVM 
-            pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-            // 3. Math/Arith -> LLVM
-            pm.addPass(mlir::createConvertMathToLLVMPass());
-            pm.addPass(mlir::createArithToLLVMConversionPass());
-            // 4. Func -> LLVM
+
             pm.addPass(mlir::createConvertFuncToLLVMPass());
-            // 5. remove Casts
+            pm.addPass(mlir::createConvertIndexToLLVMPass());
+            pm.addPass(mlir::createArithToLLVMConversionPass());
+            pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+            pm.addPass(mlir::createConvertMathToLLVMPass());
+            pm.addPass(mlir::createCanonicalizerPass());
+            pm.addPass(mlir::createCSEPass());
             pm.addPass(mlir::createReconcileUnrealizedCastsPass());
         }))
         return 1;
 
     llvm::outs() << "Processing complete. Output saved to: " << outputFilename << "\n";
+
+    llvm::outs() << "Translating to LLVM IR...\n";
+
+    llvm::LLVMContext             llvmContext;
+    std::unique_ptr<llvm::Module> llvmModule = mlir::translateModuleToLLVMIR(*module, llvmContext);
+    llvmModule->setDataLayout(
+        "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128");
+    llvmModule->setTargetTriple("x86_64-unknown-linux-gnu");
+    llvm::SmallString<128> llvmOutputBuffer(outputFilename);
+    llvm::sys::path::replace_extension(llvmOutputBuffer, "ll");
+    std::string llvmOutputFilename = llvmOutputBuffer.str().str();
+
+    std::error_code      ec_llvm;
+    llvm::raw_fd_ostream llvmFileStream(llvmOutputFilename, ec_llvm);
+
+    llvmModule->print(llvmFileStream, nullptr);
+    llvm::outs() << "LLVM IR saved to: " << llvmOutputFilename << "\n";
+
     return 0;
 }

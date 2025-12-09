@@ -15,6 +15,8 @@ add_mlir_conversion_library(CherryToLinalg
   MLIRTensorDialect
   CherryDialect
   MLIRPass
+  MLIRIR      
+  MLIRTransforms            
   MLIRTransformUtils
 )
 

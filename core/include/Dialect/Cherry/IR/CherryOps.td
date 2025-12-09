@@ -477,4 +477,21 @@ def ReturnOp : Cherry_Op<"return", [Pure, HasParent<"FuncOp">,
   // Indicate that additional verification for this operation is necessary.
   // let hasVerifier = 1;
 }
+
+// =============================================================================
+// Print Op
+// =============================================================================
+def PrintOp : Cherry_Op<"print"> {
+  let summary = "print tensor content";
+  let description = [{
+    Prints the tensor content to stdout.
+    Example:
+      cherry.print %result : !cherry.cherry_tensor<[10xf32]>
+  }];
+
+  let arguments = (ins AnyCherryTensor:$input);
+  
+  let assemblyFormat = "$input attr-dict `:` type($input)";
+}
+
 #endif

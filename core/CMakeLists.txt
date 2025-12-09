@@ -25,4 +25,12 @@ target_link_libraries(cherry
         MLIRReconcileUnrealizedCasts
         MLIRLLVMDialect
         
+        MLIRAffineToStandard
+        MLIRTargetLLVM
+        MLIRTargetLLVMIRExport
+        MLIRBuiltinToLLVMIRTranslation
+        MLIRLLVMToLLVMIRTranslation
+        MLIRIndexToLLVM  
+        LLVMCore    
+        
 )
