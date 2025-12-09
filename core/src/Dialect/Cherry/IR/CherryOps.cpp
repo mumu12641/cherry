@@ -169,51 +169,38 @@ void FuncOp::print(mlir::OpAsmPrinter& p)
                                                    getResAttrsAttrName());
 }
 
-
-// --------------------------------------------------------------------------
-// TensorGetOp Verifier
-// --------------------------------------------------------------------------
-LogicalResult TensorGetOp::verify() {
-    auto tensorType = cast<CherryTensorType>(getTensor().getType());
-    auto rank = tensorType.getShape().size();
-    
-    if (getIndices().size() != rank) {
-        return emitOpError("number of indices (") 
-               << getIndices().size() << ") must match the tensor rank (" << rank << ")";
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSliceOp
+//===----------------------------------------------------------------------===//
+void TensorSliceOp::inferShapes()
+{
+    auto                 loc       = getLoc();
+    Value                input     = getInput();
+    auto                 inputType = cast<CherryTensorType>(input.getType());
+    int64_t              rank      = inputType.getShape().size();
+    auto                 indices   = getIndices();
+    SmallVector<int64_t> outputShape;
+    for (int i = 0; i < rank; ++i) {
+        int   sizeIndex = 1 + 2 * i;
+        Value sizeVal   = indices[sizeIndex];
+        if (auto constantOp = sizeVal.getDefiningOp<ConstantOp>()) {
+            mlir::Attribute attr = constantOp.getValue();
+            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+                int64_t size = intAttr.getInt();
+                outputShape.push_back(size);
+            }
+        }
     }
-
-    Type elemType = tensorType.getElementType();
-    if (getResult().getType() != elemType) {
-        return emitOpError("result type ") << getResult().getType() 
-               << " must match tensor element type " << elemType;
-    }
-
-    return success();
+    getResult().setType(
+        CherryTensorType::get(getContext(), outputShape, inputType.getElementType()));
 }
 
-// --------------------------------------------------------------------------
-// TensorSetOp Verifier
-// --------------------------------------------------------------------------
-LogicalResult TensorSetOp::verify() {
-    auto tensorType = cast<CherryTensorType>(getTensor().getType());
-    auto rank = tensorType.getShape().size();
-
-    if (getIndices().size() != rank) {
-        return emitOpError("number of indices (") 
-               << getIndices().size() << ") must match the tensor rank (" << rank << ")";
-    }
-
-    Type elemType = tensorType.getElementType();
-    if (getValue().getType() != elemType) {
-        return emitOpError("value type ") << getValue().getType() 
-               << " must match tensor element type " << elemType;
-    }
-
-    if (getResult().getType() != tensorType) {
-        return emitOpError("result tensor type must match input tensor type");
-    }
-
-    return success();
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSetSliceOp
+//===----------------------------------------------------------------------===//
+void TensorSetSliceOp::inferShapes()
+{
+    getResult().setType(getDest().getType());
 }
 
 //===----------------------------------------------------------------------===//

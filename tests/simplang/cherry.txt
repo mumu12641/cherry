@@ -1,0 +1,37 @@
+head_size = dim / n_heads;  // 64
+
+// [768]
+x = tensor_slice(token_embedding_table, token, token, 0, dim)
+
+layer = 0
+// [768]
+xb = rmsnorm(x, scale, eps)
+// [768*768]
+wq_layer = tensor_slice(wq, layer * dim * dim, dim * dim, 0, dim)
+wk_layer = tensor_slice(wk, layer * dim * dim, dim * dim, 0, dim)
+wv_layer = tensor_slice(wv, layer * dim * dim, dim * dim, 0, dim)
+
+// [768]
+q = matmul(xb, wq_layer)
+k = matmul(xb, wk_layer)
+v = matmul(xb, wv_layer)
+
+kv_offset = layer * seq_len * dim + pos * dim
+// key_cache: layer * 1024 * dim
+// key_cache[layer][pos][0:dim] = k
+// value_cache[layer][pos][0:dim] = v
+
+// multi head
+head_index = 0
+q_offset = head_index * head_size
+// 64
+q_head = tensor_slice(q, q_offset, q_offset + head_size, 0, head_size)
+// pre_pos * 64
+key_prev_pos_head ;
+
+// n_heads * seq_len
+att[head_index][curr_pre_pos] = q_head * key_prev_pos_head[curr_pre_pos,:]
+
+// n_heads * seq_len
+att_soft[head_index] = softmax(att, axis = 1)
+

@@ -52,20 +52,58 @@ def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure]> {
 }
 
 // =============================================================================
+// Tensor Slice Op
+// input[start:end]
+// =============================================================================
+def Cherry_TensorSliceOp : Cherry_Op<"tensor_slice", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Extract sub-tensor slice";
+  let description = [{
+    Example:
+      %slice = cherry.tensor_slice %input, %start0, %size0, %start1, %size1 : (!cherry.tensor<4x5xf32>, i64, i64, i64, i64) -> !cherry.tensor<2x2xf32>
+  }];
+  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$indices);
+  let results = (outs AnyCherryTensor:$result);
+  let assemblyFormat = "$input `[` $indices `]` attr-dict `:` functional-type(operands, results)";
+}
+
+def Cherry_TensorSetSliceOp : Cherry_Op<"tensor_set_slice", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Insert sub-tensor slice into input tensor (supports partial indexing)";
+  let description = [{
+    In-place update semantics for tensors.
+    
+    Case 1: Full Indexing (Scalar/Small Block update)
+      // input[2][512][:] = value (1x1x768)
+      %res = cherry.tensor_set_slice %dest, %src, %i, %j
+    
+    Case 2: Partial Indexing (Row/Page update)
+      // input[3][:][:] = value (1024x768)
+      // input is 12x1024x768
+      %res = cherry.tensor_set_slice %dest, %src, %k
+  }];
+
+  let arguments = (ins AnyCherryTensor:$dest, AnyCherryTensor:$source, Variadic<I64>:$indices);
+  let results = (outs AnyCherryTensor:$result);
+  
+  let assemblyFormat = "$dest `[` $indices `]` `,` $source attr-dict `:` functional-type(operands, results)";
+}
+
+
+
+// =============================================================================
 // Tensor Get Op
 // =============================================================================
 def Cherry_TensorGetOp : Cherry_Op<"tensor_get", [Pure]> {
   let summary = "Extracts an element from a tensor at the given indices";
   let arguments = (ins 
-    AnyCherryTensor:$tensor,
+    AnyCherryTensor:$input,
     Variadic<I64>:$indices
   );
 
   let results = (outs AnyType:$result);
 
-  let hasVerifier = 1;
+  // let hasVerifier = 1;
 
-  let assemblyFormat = "$tensor `[` $indices `]` attr-dict `:` functional-type(operands, results)";
+  let assemblyFormat = "$input `[` $indices `]` attr-dict `:` functional-type(operands, results)";
 }
 
 // =============================================================================
@@ -75,16 +113,14 @@ def Cherry_TensorSetOp : Cherry_Op<"tensor_set", [Pure]> {
   let summary = "Inserts an element into a tensor at the given indices";
 
   let arguments = (ins 
-    AnyCherryTensor:$tensor,
+    AnyCherryTensor:$input,
     Variadic<I64>:$indices,
     AnyType:$value
   );
 
   let results = (outs AnyCherryTensor:$result);
-
-   let hasVerifier = 1;
-
-  let assemblyFormat = "$tensor `[` $indices `]` `,` $value attr-dict `:` functional-type(operands, results)";
+  // let hasVerifier = 1;
+  let assemblyFormat = "$input `[` $indices `]` `,` $value attr-dict `:` functional-type(operands, results)";
 }
 
 // ===----------------------------------------------------------------------===//
@@ -382,8 +418,8 @@ def FuncOp : Cherry_Op<"func", [Symbol ,FunctionOpInterface, IsolatedFromAbove]>
 def CallOp : Cherry_Op<"call",[DeclareOpInterfaceMethods<CallOpInterface>]> 
 {
   let summary = "call operation";
-  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyCherryTensor>:$inputs);
-  let results = (outs AnyCherryTensor);
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$inputs);
+  let results = (outs AnyType);
   let assemblyFormat = [{
     $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
   }];

@@ -45,6 +45,7 @@ fn stories110M_forward(
 
     // Get token embedding: x = token_embedding_table[token, :]
     var i = 0i;
+    // slice op
     // x = token_embedding_table[token, :]
     while (i < dim) {
         x[i] = token_embedding_table[token * dim + i];
@@ -62,6 +63,7 @@ fn stories110M_forward(
         var qkv_offset = layer * dim * dim;
 
         // Extract weight tensors for this layer
+        // 
         f32<768, 768> wq_layer = tensor_from_array(wq, qkv_offset);
         f32<768, 768> wk_layer = tensor_from_array(wk, qkv_offset);
         f32<768, 768> wv_layer = tensor_from_array(wv, qkv_offset);

@@ -78,6 +78,120 @@ struct CreateTensorOpLowering : public OpConversionPattern<CreateTensorOp>
     }
 };
 
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSliceOp lowering
+//===----------------------------------------------------------------------===//
+struct TensorSliceOpLowering : public OpConversionPattern<cherry::TensorSliceOp>
+{
+    using OpConversionPattern<cherry::TensorSliceOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(cherry::TensorSliceOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        Location loc    = op.getLoc();
+        Value    input  = adaptor.getInput();
+        auto inputType  = cast<RankedTensorType>(this->typeConverter->convertType(input.getType()));
+        int64_t rank    = inputType.getRank();
+        auto    indices = op.getIndices();
+        Type    indexType = rewriter.getIndexType();
+
+        SmallVector<OpFoldResult> offsets;
+        SmallVector<OpFoldResult> sizes;
+        SmallVector<OpFoldResult> strides;
+
+
+        for (int i = 0; i < rank; ++i) {
+            Value offsetVal = indices[2 * i];
+            Value sizeVal   = indices[2 * i + 1];
+
+            Value offsetIndex = rewriter.create<arith::IndexCastOp>(loc, indexType, offsetVal);
+            offsets.push_back(offsetIndex);
+
+            if (auto constantOp = sizeVal.getDefiningOp<ConstantOp>()) {
+                mlir::Attribute attr = constantOp.getValue();
+                if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
+                    int64_t size = intAttr.getInt();
+                    sizes.push_back(rewriter.getIndexAttr(size));
+                }
+            }
+
+            strides.push_back(rewriter.getIndexAttr(1));
+        }
+
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        rewriter.replaceOpWithNewOp<tensor::ExtractSliceOp>(
+            op, resultType, input, offsets, sizes, strides);
+        return success();
+    }
+};
+
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSetSliceOp lowering
+//===----------------------------------------------------------------------===//
+struct TensorSetSliceOpLowering : public OpConversionPattern<TensorSetSliceOp>
+{
+    using OpConversionPattern<TensorSetSliceOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(TensorSetSliceOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        Location loc = op.getLoc();
+
+        Value dest   = adaptor.getDest();
+        Value source = adaptor.getSource();
+
+        auto destType   = cast<RankedTensorType>(dest.getType());
+        auto sourceType = cast<RankedTensorType>(source.getType());
+
+        int64_t destRank   = destType.getRank();
+        int64_t sourceRank = sourceType.getRank();
+
+        auto    indices    = adaptor.getIndices();
+        int64_t numIndices = indices.size();
+
+        SmallVector<OpFoldResult> offsets;
+        SmallVector<OpFoldResult> sizes;
+        SmallVector<OpFoldResult> strides;
+
+        Type  indexType = rewriter.getIndexType();
+        Value c0        = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+        Value c1        = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+
+        for (int i = 0; i < destRank; ++i) {
+            if (i < numIndices) {
+                Value idxVal = indices[i];
+                Value idx    = rewriter.create<arith::IndexCastOp>(loc, indexType, idxVal);
+                offsets.push_back(idx);
+            }
+            else {
+                offsets.push_back(rewriter.getIndexAttr(0));
+            }
+
+            if (i < numIndices) {
+                sizes.push_back(rewriter.getIndexAttr(1));
+            }
+            else {
+                int sourceDimIdx = i - numIndices;
+                if (sourceRank == destRank) {
+                    sourceDimIdx = i;
+                }
+                sizes.push_back(rewriter.getIndexAttr(sourceType.getDimSize(sourceDimIdx)));
+            }
+            strides.push_back(rewriter.getIndexAttr(1));
+        }
+        llvm::outs() << "dest: " << dest << "\n";
+        llvm::outs() << "source: " << source << "\n";
+        rewriter.replaceOpWithNewOp<tensor::InsertSliceOp>(
+            op, source, dest, offsets, sizes, strides);
+
+        return success();
+    }
+};
+
+
+
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::TensorGetOp lowering
 // ===----------------------------------------------------------------------===//
@@ -96,7 +210,7 @@ struct TensorGetOpLowering : public OpConversionPattern<TensorGetOp>
                 rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), indice);
             indicesIndex.push_back(indiceIndex);
         }
-        rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, adaptor.getTensor(), indicesIndex);
+        rewriter.replaceOpWithNewOp<tensor::ExtractOp>(op, adaptor.getInput(), indicesIndex);
         return success();
     }
 };
@@ -120,9 +234,9 @@ struct TensorSetOpLowering : public OpConversionPattern<TensorSetOp>
             indicesIndex.push_back(indiceIndex);
         }
         rewriter.replaceOpWithNewOp<tensor::InsertOp>(op,
-                                                      adaptor.getValue(),    // scalar to insert
-                                                      adaptor.getTensor(),   // dest tensor
-                                                      indicesIndex           // indices
+                                                      adaptor.getValue(),   // scalar to insert
+                                                      adaptor.getInput(),   // dest tensor
+                                                      indicesIndex          // indices
         );
         return success();
     }
@@ -921,6 +1035,8 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
     target.addIllegalOp<cherry::ConstantOp>();
     target.addIllegalOp<cherry::CreateTensorOp>();
+    target.addIllegalOp<cherry::TensorSliceOp>();
+    target.addIllegalOp<cherry::TensorSetSliceOp>();
     target.addIllegalOp<cherry::TensorGetOp>();
     target.addIllegalOp<cherry::TensorSetOp>();
     target.addIllegalOp<cherry::ReturnOp>();
@@ -951,6 +1067,8 @@ void ConvertCherryToLinalgPass::runOnOperation()
     RewritePatternSet patterns(&getContext());
     patterns.add<ConstantOpLowering,
                  CreateTensorOpLowering,
+                 TensorSliceOpLowering,
+                 TensorSetSliceOpLowering,
                  TensorGetOpLowering,
                  TensorSetOpLowering,
 
