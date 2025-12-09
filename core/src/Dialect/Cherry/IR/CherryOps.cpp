@@ -79,6 +79,13 @@ void CallOp::build(mlir::OpBuilder& builder, mlir::OperationState& state, String
     state.addOperands(arguments);
     state.addAttribute("callee", mlir::SymbolRefAttr::get(builder.getContext(), callee));
 }
+void CallOp::build(mlir::OpBuilder& builder, mlir::OperationState& state, StringRef callee,
+                   TypeRange results, ArrayRef<mlir::Value> arguments)
+{
+    state.addTypes(results);
+    state.addOperands(arguments);
+    state.addAttribute("callee", mlir::SymbolRefAttr::get(builder.getContext(), callee));
+}
 CallInterfaceCallable CallOp::getCallableForCallee()
 {
     return (*this)->getAttrOfType<SymbolRefAttr>("callee");
@@ -105,10 +112,13 @@ void CastOp::inferShapes()
 }
 bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs)
 {
-    if (inputs.size() != 1 || outputs.size() != 1) return false;
-    auto input  = llvm::dyn_cast<CherryTensorType>(inputs.front());
-    auto output = llvm::dyn_cast<CherryTensorType>(outputs.front());
-    if (!input || !output || input.getElementType() != output.getElementType()) return false;
+    if (inputs.size() != outputs.size()) return false;
+    int size = inputs.size();
+    for (int i = 0; i < size; i++) {
+        auto input  = llvm::dyn_cast<CherryTensorType>(inputs[i]);
+        auto output = llvm::dyn_cast<CherryTensorType>(outputs[i]);
+        if (!input || !output || input.getElementType() != output.getElementType()) return false;
+    }
     return true;
 }
 struct EraseIdentityCast : public mlir::OpRewritePattern<CastOp>
@@ -177,19 +187,13 @@ void TensorSliceOp::inferShapes()
     auto                 loc       = getLoc();
     Value                input     = getInput();
     auto                 inputType = cast<CherryTensorType>(input.getType());
+    auto                 sizesAttr = getSizesAttr();
     int64_t              rank      = inputType.getShape().size();
-    auto                 indices   = getIndices();
     SmallVector<int64_t> outputShape;
-    for (int i = 0; i < rank; ++i) {
-        int   sizeIndex = 1 + 2 * i;
-        Value sizeVal   = indices[sizeIndex];
-        if (auto constantOp = sizeVal.getDefiningOp<ConstantOp>()) {
-            mlir::Attribute attr = constantOp.getValue();
-            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
-                int64_t size = intAttr.getInt();
-                outputShape.push_back(size);
-            }
-        }
+    for (auto attr : sizesAttr) {
+        auto    intAttr = dyn_cast<IntegerAttr>(attr);
+        int64_t size    = intAttr.getInt();
+        outputShape.push_back(size);
     }
     getResult().setType(
         CherryTensorType::get(getContext(), outputShape, inputType.getElementType()));
@@ -285,6 +289,25 @@ void TensorSigmoidOp::inferShapes()
 void TensorTanhOp::inferShapes()
 {
     getResult().setType(getOperand().getType());
+}
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::ArgmaxOp
+//===----------------------------------------------------------------------===//
+void ArgMaxOp::inferShapes()
+{
+    auto                 inputType = cast<CherryTensorType>(getInput().getType());
+    auto                 rank      = inputType.getShape().size();
+    SmallVector<int64_t> outputShape;
+    int64_t              dim = getDim();
+
+    for (int i = 0; i < rank; ++i) {
+        if (i != dim) {
+            outputShape.push_back(inputType.getShape()[i]);
+        }
+    }
+    getResult().setType(CherryTensorType::get(
+        getContext(), outputShape, cast<CherryTensorType>(getResult().getType()).getElementType()));
 }
 
 //===----------------------------------------------------------------------===//

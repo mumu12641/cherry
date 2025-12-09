@@ -15,6 +15,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/TypeRange.h"
+#include "mlir/IR/Types.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
 
@@ -88,12 +89,15 @@ struct TensorSliceOpLowering : public OpConversionPattern<cherry::TensorSliceOp>
     LogicalResult matchAndRewrite(cherry::TensorSliceOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        Location loc    = op.getLoc();
-        Value    input  = adaptor.getInput();
-        auto inputType  = cast<RankedTensorType>(this->typeConverter->convertType(input.getType()));
-        int64_t rank    = inputType.getRank();
-        auto    indices = op.getIndices();
-        Type    indexType = rewriter.getIndexType();
+        Location loc   = op.getLoc();
+        Value    input = adaptor.getInput();
+        auto inputType = cast<RankedTensorType>(this->typeConverter->convertType(input.getType()));
+        int64_t rank   = inputType.getRank();
+
+        auto startValues = adaptor.getStarts();
+        auto sizesAttr   = op.getSizes();
+
+        Type indexType = rewriter.getIndexType();
 
         SmallVector<OpFoldResult> offsets;
         SmallVector<OpFoldResult> sizes;
@@ -101,19 +105,14 @@ struct TensorSliceOpLowering : public OpConversionPattern<cherry::TensorSliceOp>
 
 
         for (int i = 0; i < rank; ++i) {
-            Value offsetVal = indices[2 * i];
-            Value sizeVal   = indices[2 * i + 1];
+            Value offsetVal = startValues[i];
 
             Value offsetIndex = rewriter.create<arith::IndexCastOp>(loc, indexType, offsetVal);
             offsets.push_back(offsetIndex);
 
-            if (auto constantOp = sizeVal.getDefiningOp<ConstantOp>()) {
-                mlir::Attribute attr = constantOp.getValue();
-                if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
-                    int64_t size = intAttr.getInt();
-                    sizes.push_back(rewriter.getIndexAttr(size));
-                }
-            }
+            auto    sizeAttr = cast<IntegerAttr>(sizesAttr[i]);
+            int64_t sizeVal  = sizeAttr.getInt();
+            sizes.push_back(rewriter.getIndexAttr(sizeVal));
 
             strides.push_back(rewriter.getIndexAttr(1));
         }
@@ -181,8 +180,6 @@ struct TensorSetSliceOpLowering : public OpConversionPattern<TensorSetSliceOp>
             }
             strides.push_back(rewriter.getIndexAttr(1));
         }
-        llvm::outs() << "dest: " << dest << "\n";
-        llvm::outs() << "source: " << source << "\n";
         rewriter.replaceOpWithNewOp<tensor::InsertSliceOp>(
             op, source, dest, offsets, sizes, strides);
 
@@ -441,6 +438,97 @@ struct TensorSigmoidOpLowering : public OpConversionPattern<TensorSigmoidOp>
         return success();
     }
 };
+
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::ArgMaxOp lowering
+// ===----------------------------------------------------------------------===//
+struct ArgMaxOpLowering : public OpConversionPattern<ArgMaxOp>
+{
+    using OpConversionPattern<ArgMaxOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(ArgMaxOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        Location loc       = op.getLoc();
+        Value    input     = adaptor.getInput();
+        auto     inputType = cast<RankedTensorType>(input.getType());
+        auto     resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        int64_t rank = inputType.getRank();
+        int64_t dim  = op.getDim();
+
+
+        // Init Max Val
+        Value minInf;
+        Type  elemType = inputType.getElementType();
+        minInf         = rewriter.create<arith::ConstantOp>(
+            loc, rewriter.getF32FloatAttr(-std::numeric_limits<float>::infinity()));
+
+        Value emptyVal   = rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elemType);
+        Value initMaxVal = rewriter.create<linalg::FillOp>(loc, minInf, emptyVal).getResult(0);
+
+        // Init Max Idx
+        Value zeroI64 = rewriter.create<arith::ConstantIntOp>(loc, 0, 64);
+        Value emptyIdx =
+            rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), rewriter.getI64Type());
+        Value initMaxIdx = rewriter.create<linalg::FillOp>(loc, zeroI64, emptyIdx).getResult(0);
+
+        SmallVector<AffineExpr> inputExprs;
+        SmallVector<AffineExpr> outputExprs;
+
+        for (int i = 0; i < rank; ++i) {
+            inputExprs.push_back(rewriter.getAffineDimExpr(i));
+            if (i != dim) {
+                outputExprs.push_back(rewriter.getAffineDimExpr(i));
+            }
+        }
+
+        auto inputMap  = AffineMap::get(rank, 0, inputExprs, rewriter.getContext());
+        auto outputMap = AffineMap::get(rank, 0, outputExprs, rewriter.getContext());
+
+        SmallVector<AffineMap> indexingMaps = {
+            inputMap, outputMap, outputMap};   // Input, OutVal, OutIdx
+
+        SmallVector<utils::IteratorType> iteratorTypes;
+        for (int i = 0; i < rank; ++i) {
+            if (i == dim)
+                iteratorTypes.push_back(utils::IteratorType::reduction);
+            else
+                iteratorTypes.push_back(utils::IteratorType::parallel);
+        }
+
+        auto genericOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            TypeRange{initMaxVal.getType(), initMaxIdx.getType()},   // Result types
+            ValueRange{input},                                       // Inputs
+            ValueRange{initMaxVal, initMaxIdx},                      // Outputs (Inits)
+            indexingMaps,
+            iteratorTypes,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value inVal  = args[0];
+                Value accVal = args[1];
+                Value accIdx = args[2];
+
+                // curr Reduction dim index
+                Value currentIdx    = b.create<linalg::IndexOp>(loc, dim);
+                Value currentIdxI64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), currentIdx);
+
+                // inVal > accVal ?
+                Value cmp = b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGT, inVal, accVal);
+                // Max Value
+                Value newMaxVal = b.create<arith::SelectOp>(loc, cmp, inVal, accVal);
+                // Max Index
+                Value newMaxIdx = b.create<arith::SelectOp>(loc, cmp, currentIdxI64, accIdx);
+
+                b.create<linalg::YieldOp>(loc, ValueRange{newMaxVal, newMaxIdx});
+            });
+
+        rewriter.replaceOp(op, genericOp.getResult(1));
+
+        return success();
+    }
+};
+
 
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::TransposeOp lowering
@@ -946,11 +1034,14 @@ struct CallOpLowering : public OpConversionPattern<CallOp>
     LogicalResult matchAndRewrite(CallOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        auto loc = op.getLoc();
-        auto resultType =
-            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto              loc = op.getLoc();
+        SmallVector<Type> returnTypes;
+        for (auto result : op.getResults()) {
+            returnTypes.push_back(
+                cast<RankedTensorType>(this->typeConverter->convertType(result.getType())));
+        }
         rewriter.replaceOpWithNewOp<func::CallOp>(
-            op, op.getCalleeAttr(), TypeRange{resultType}, adaptor.getInputs());
+            op, op.getCalleeAttr(), returnTypes, adaptor.getInputs());
         return success();
     }
 };
@@ -1055,6 +1146,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::TensorReluOp>();
     target.addIllegalOp<cherry::TensorSiluOp>();
     target.addIllegalOp<cherry::TensorSigmoidOp>();
+    target.addIllegalOp<cherry::ArgMaxOp>();
     target.addIllegalOp<cherry::TransposeOp>();
     target.addIllegalOp<cherry::ReshapeOp>();
     target.addIllegalOp<cherry::MatMulOp>();
@@ -1087,6 +1179,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  TensorReluOpLowering,
                  TensorSiluOpLowering,
                  TensorSigmoidOpLowering,
+                 ArgMaxOpLowering,
 
                  TransposeOpLowering,
                  ReshapeOpLowering,

@@ -46,11 +46,20 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
+// [新增] 引入命令行和路径处理的头文件
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Path.h"
 
 #include <memory>
 #include <string>
 #include <system_error>
 #include <utility>
+
+// [新增] 定义命令行参数
+namespace cl = llvm::cl;
+static cl::opt<std::string> inputFilename(cl::Positional, 
+                                          cl::desc("<input file>"), 
+                                          cl::Required);
 
 bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
                          llvm::raw_fd_ostream&                   fileStream,
@@ -78,6 +87,9 @@ bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
 
 int main(int argc, char** argv)
 {
+    // [新增] 解析命令行参数
+    cl::ParseCommandLineOptions(argc, argv, "Cherry Compiler Driver\n");
+
     mlir::DialectRegistry registry;
     registry.insert<mlir::cherry::CherryDialect,
                     mlir::arith::ArithDialect,
@@ -102,8 +114,14 @@ int main(int argc, char** argv)
     mlir::MLIRContext context(registry);
     context.loadAllAvailableDialects();
 
-    std::string inputFilename  = "/home/nx/ycy/pb/cherry/tests/components/test_tensor_set_slice.mlir";
-    std::string outputFilename = "/home/nx/ycy/pb/cherry/tests/components/test_tensor_set_slice_output.mlir";
+    // [修改] 移除硬编码路径，使用命令行参数
+    // inputFilename 变量由 cl::opt 自动填充
+    
+    // [新增] 自动生成输出文件名逻辑
+    // 例如输入: /path/to/test.mlir -> 输出: /path/to/test_output.mlir
+    llvm::SmallString<128> outputBuffer(inputFilename);
+    llvm::sys::path::replace_extension(outputBuffer, ""); // 去掉原扩展名 (.mlir)
+    std::string outputFilename = outputBuffer.str().str() + "_output.mlir"; // 加上新后缀
 
     mlir::OwningOpRef<mlir::ModuleOp> module =
         mlir::parseSourceFile<mlir::ModuleOp>(inputFilename, &context);
@@ -113,6 +131,7 @@ int main(int argc, char** argv)
         return 1;
     }
     llvm::outs() << "Successfully parsed: " << inputFilename << "\n";
+    llvm::outs() << "Output will be saved to: " << outputFilename << "\n";
 
     std::error_code      ec;
     llvm::raw_fd_ostream fileStream(outputFilename, ec);
@@ -191,9 +210,6 @@ int main(int argc, char** argv)
             pm.addPass(mlir::createReconcileUnrealizedCastsPass());
         }))
         return 1;
-
-
-
 
     llvm::outs() << "Processing complete. Output saved to: " << outputFilename << "\n";
     return 0;

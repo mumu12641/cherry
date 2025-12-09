@@ -53,18 +53,27 @@ def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure]> {
 
 // =============================================================================
 // Tensor Slice Op
-// input[start:end]
+// Extract sub-tensor slice with static sizes and dynamic offsets.
 // =============================================================================
 def Cherry_TensorSliceOp : Cherry_Op<"tensor_slice", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Extract sub-tensor slice";
   let description = [{
     Example:
-      %slice = cherry.tensor_slice %input, %start0, %size0, %start1, %size1 : (!cherry.tensor<4x5xf32>, i64, i64, i64, i64) -> !cherry.tensor<2x2xf32>
+      // input: 4x5xf32
+      // starts: %i, %j (dynamic)
+      // sizes: [2, 2] (static)
+      %slice = cherry.tensor_slice %input, %i, %j sizes [2, 2] 
+               : (!cherry.tensor<4x5xf32>, i64, i64) -> !cherry.tensor<2x2xf32>
   }];
-  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$indices);
+  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$starts, I64ArrayAttr:$sizes);
+  
   let results = (outs AnyCherryTensor:$result);
-  let assemblyFormat = "$input `[` $indices `]` attr-dict `:` functional-type(operands, results)";
+
+  let assemblyFormat = [{
+    $input `[` $starts `]` `sizes`  $sizes  attr-dict `:` functional-type(operands, results)
+  }];
 }
+
 
 def Cherry_TensorSetSliceOp : Cherry_Op<"tensor_set_slice", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Insert sub-tensor slice into input tensor (supports partial indexing)";
@@ -228,6 +237,28 @@ def  Cherry_TensorTanhOp : Cherry_UnaryTensorOp<"tensor_tanh"> {
 //===----------------------------------------------------------------------===//
 // Tensor Reduction Operations 
 //===----------------------------------------------------------------------===//
+
+// =============================================================================
+// ArgMax Op
+// Returns the indices of the maximum values along a dimension.
+// =============================================================================
+def Cherry_ArgMaxOp : Cherry_Op<"argmax", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Computes the indices of the maximum values along a dimension";
+  let description = [{
+    Reduces the input tensor along the given dimension, returning the indices of the maximum values.
+    The output tensor has one fewer dimension than the input (rank reduction).
+    
+    Example:
+      // input: 1x32000xf32, dim: 1
+      // output: 1xi64
+      %idx = cherry.argmax %input dim 1 : (!cherry.tensor<1x32000xf32>) -> !cherry.tensor<1xi64>
+  }];
+
+  let arguments = (ins AnyCherryTensor:$input, I64Attr:$dim);
+  let results = (outs AnyCherryTensor:$result);
+
+  let assemblyFormat = "$input `dim` $dim attr-dict `:` functional-type(operands, results)";
+}
 
 // class Cherry_ReductionOp<string mnemonic> : Cherry_Op<mnemonic, [Pure]> {
 //   let arguments = (ins AnyCherryTensor:$input, Optional<I64>:$axis);
@@ -419,12 +450,15 @@ def CallOp : Cherry_Op<"call",[DeclareOpInterfaceMethods<CallOpInterface>]>
 {
   let summary = "call operation";
   let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$inputs);
-  let results = (outs AnyType);
+  let results = (outs Variadic<AnyCherryTensor>:$results);
   let assemblyFormat = [{
     $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
   }];
   let builders = [
-    OpBuilder<(ins "StringRef":$callee, "ArrayRef<Value>":$arguments)>
+    OpBuilder<(ins "StringRef":$callee, "ArrayRef<Value>":$arguments)>,
+    
+    OpBuilder<(ins "StringRef":$callee, "TypeRange":$results, "ArrayRef<Value>":$arguments)>,
+
   ];
 }
 

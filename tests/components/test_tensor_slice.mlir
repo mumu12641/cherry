@@ -3,8 +3,8 @@ module {
     %c0 = cherry.constant(0 : i64) : i64
     %c2 = cherry.constant(2 : i64) : i64
 
-    %0 = cherry.tensor_slice %arg0[%c0, %c2, %offset_x, %c2]
-         : (!cherry.cherry_tensor<[4x4xf32]>, i64, i64, i64, i64) -> !cherry.cherry_tensor<[?xf32]>
+    %0 = cherry.tensor_slice %arg0[%c0, %offset_x] sizes [2, 2]
+         : (!cherry.cherry_tensor<[4x4xf32]>, i64, i64) -> !cherry.cherry_tensor<[?xf32]>
 
     cherry.return %0 : !cherry.cherry_tensor<[?xf32]>
   }
