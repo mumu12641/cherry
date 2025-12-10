@@ -444,6 +444,61 @@ struct TensorSigmoidOpLowering : public OpConversionPattern<TensorSigmoidOp>
     }
 };
 
+// ============================================================================
+// TensorScalarOp
+// ============================================================================
+template<typename OpType, typename FloatOp, typename IntOp>
+struct TensorScalarOpLowering : public OpConversionPattern<OpType>
+{
+
+    using OpConversionPattern<OpType>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(OpType op, typename OpType::Adaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto  loc    = op.getLoc();
+        Value input  = adaptor.getInput();
+        Value scalar = adaptor.getScalar();
+
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto    inputType = cast<RankedTensorType>(input.getType());
+        int64_t rank      = inputType.getRank();
+
+        Value initTensor = rewriter.create<tensor::EmptyOp>(
+            loc, resultType.getShape(), resultType.getElementType());
+
+        SmallVector<AffineMap, 2> indexingMaps = {
+            rewriter.getMultiDimIdentityMap(rank),   // Input
+            rewriter.getMultiDimIdentityMap(rank)    // Output
+        };
+        SmallVector<utils::IteratorType> iteratorTypes(rank, utils::IteratorType::parallel);
+
+        rewriter.replaceOpWithNewOp<linalg::GenericOp>(
+            op,
+            TypeRange{resultType},
+            ValueRange{input},        // Input Tensor
+            ValueRange{initTensor},   // Output Tensor
+            indexingMaps,
+            iteratorTypes,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value inElem = args[0];
+                Type  type   = scalar.getType();
+                Value res;
+                if (isa<FloatType>(type)) {
+                    res = b.create<FloatOp>(loc, inElem, scalar);
+                }
+                else {
+                    res = b.create<IntOp>(loc, inElem, scalar);
+                }
+                b.create<linalg::YieldOp>(loc, res);
+            });
+
+        return success();
+    }
+};
+
+
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::ArgMaxOp lowering
 // ===----------------------------------------------------------------------===//
@@ -538,36 +593,30 @@ struct ArgMaxOpLowering : public OpConversionPattern<ArgMaxOp>
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::TransposeOp lowering
 // ===----------------------------------------------------------------------===//
-struct TransposeOpLowering : public OpConversionPattern<TransposeOp>
+struct TransposeOpLowering : public OpConversionPattern<cherry::TransposeOp>
 {
-    using OpConversionPattern<TransposeOp>::OpConversionPattern;
+    using OpConversionPattern<cherry::TransposeOp>::OpConversionPattern;
 
-    LogicalResult matchAndRewrite(TransposeOp op, OpAdaptor adaptor,
+    LogicalResult matchAndRewrite(cherry::TransposeOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
         auto resultType =
             cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
-        auto inputType = cast<RankedTensorType>(adaptor.getInput().getType());
-
         Value initTensor = rewriter.create<tensor::EmptyOp>(
             op.getLoc(), resultType.getShape(), resultType.getElementType());
 
+        ArrayAttr            permAttr = op.getPermutation();
         SmallVector<int64_t> permValues;
-
-        for (auto permVal : adaptor.getPermutation()) {
-            auto constantOp = permVal.getDefiningOp<arith::ConstantOp>();
-            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(constantOp.getValue())) {
-                permValues.push_back(intAttr.getInt());
-            }
-            else {
-                return failure();
-            }
+        for (auto attr : permAttr) {
+            permValues.push_back(cast<IntegerAttr>(attr).getInt());
         }
         rewriter.replaceOpWithNewOp<linalg::TransposeOp>(
             op, adaptor.getInput(), initTensor, rewriter.getDenseI64ArrayAttr(permValues));
+
         return success();
     }
 };
+
 
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::ReshapeOp lowering
@@ -611,47 +660,46 @@ struct GenerateMaskOpLowering : public OpConversionPattern<GenerateMaskOp>
     LogicalResult matchAndRewrite(GenerateMaskOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        auto loc = op.getLoc();
-        Value boundary = adaptor.getBoundary(); 
-        
-        auto resultType = cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto  loc      = op.getLoc();
+        Value boundary = adaptor.getBoundary();
+
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
         auto elemType = resultType.getElementType();
-        
-        ArrayAttr shapeAttr = op.getShape();
+
+        ArrayAttr            shapeAttr = op.getShape();
         SmallVector<int64_t> staticShape;
         for (auto attr : shapeAttr) {
             staticShape.push_back(cast<IntegerAttr>(attr).getInt());
         }
-        
+
         int64_t rank = staticShape.size();
 
-        Value initTensor = rewriter.create<tensor::EmptyOp>(
-            loc, staticShape, elemType);
+        Value initTensor = rewriter.create<tensor::EmptyOp>(loc, staticShape, elemType);
 
-        SmallVector<AffineMap, 1> indexingMaps = {
-            rewriter.getMultiDimIdentityMap(rank)
-        };
+        SmallVector<AffineMap, 1> indexingMaps = {rewriter.getMultiDimIdentityMap(rank)};
 
         SmallVector<utils::IteratorType> iteratorTypes(rank, utils::IteratorType::parallel);
 
         rewriter.replaceOpWithNewOp<linalg::GenericOp>(
             op,
             TypeRange{resultType},
-            ValueRange{},           // inputs: none
-            ValueRange{initTensor}, // outputs
+            ValueRange{},             // inputs: none
+            ValueRange{initTensor},   // outputs
             indexingMaps,
             iteratorTypes,
             [&](OpBuilder& b, Location loc, ValueRange args) {
-                int64_t lastDim = rank - 1; 
-                Value idx = b.create<linalg::IndexOp>(loc, lastDim);
-                Value idxI64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), idx);
+                int64_t lastDim = rank - 1;
+                Value   idx     = b.create<linalg::IndexOp>(loc, lastDim);
+                Value   idxI64  = b.create<arith::IndexCastOp>(loc, b.getI64Type(), idx);
 
                 // idx <= boundary
-                Value cond = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, idxI64, boundary);
+                Value cond =
+                    b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, idxI64, boundary);
 
-                Value one = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 1.0));
+                Value one  = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 1.0));
                 Value zero = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 0.0));
-                Value res = b.create<arith::SelectOp>(loc, cond, one, zero);
+                Value res  = b.create<arith::SelectOp>(loc, cond, one, zero);
 
                 b.create<linalg::YieldOp>(loc, res);
             });
@@ -1417,8 +1465,9 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::CastOp>();
     target.addIllegalOp<cherry::CallOp>();
     target.addIllegalOp<cherry::PrintOp>();
-
     RewritePatternSet patterns(&getContext());
+
+
     patterns.add<ConstantOpLowering,
                  CreateTensorOpLowering,
                  TensorSliceOpLowering,
@@ -1443,9 +1492,14 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  TensorSigmoidOpLowering,
                  ArgMaxOpLowering,
 
+                 TensorScalarOpLowering<cherry::TensorMulScalarOp, arith::MulFOp, arith::MulIOp>,
+                 TensorScalarOpLowering<cherry::TensorDivScalarOp, arith::DivFOp, arith::DivSIOp>,
+                 TensorScalarOpLowering<cherry::TensorAddScalarOp, arith::AddFOp, arith::AddIOp>,
+                 TensorScalarOpLowering<cherry::TensorSubScalarOp, arith::SubFOp, arith::SubIOp>,
+
                  TransposeOpLowering,
                  ReshapeOpLowering,
-                
+
                  GenerateMaskOpLowering,
                  MaskedMatMulOpLowering,
                  MatMulOpLowering,

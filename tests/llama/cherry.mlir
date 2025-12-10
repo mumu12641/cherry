@@ -43,7 +43,7 @@ module {
     %constant_1 = cherry.constant (1 : i64) : i64
     %n_layers = arith.constant 12 : index // 12 layers
     %dim = cherry.constant (768 : i64) : i64
-    %head_num = cherry.constant (12 : i64) : i64
+    %head_num = arith.constant 12 : index // 12 heads
     %head_dim = cherry.constant (64 : i64) : i64 // head_dim
     %scale_val = cherry.constant (0.125 : f32) : f32 // 1 / sqrt(64)
     %max_len = cherry.constant (1024 : i64) : i64
@@ -114,7 +114,61 @@ module {
             : (!cherry.cherry_tensor<[12x1024x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1024x768xf32]>
         %v_layer_full = cherry.reshape %v_layer_full_1, %max_len, %dim
             : (!cherry.cherry_tensor<[1x1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x768xf32]>
-        
+            
+        %att_out_init = cherry.create_tensor dense<0.0> : tensor<1x768xf32> -> !cherry.cherry_tensor<[1x768xf32]>
+        %att_out_final = scf.for %h = %c0 to %head_num step %c1 
+          iter_args(%curr_att_out = %att_out_init) -> (!cherry.cherry_tensor<[1x768xf32]>) {
+          
+            %h_i64 = arith.index_cast %h : index to i64
+            %offset = arith.muli %h_i64, %head_dim : i64
+            
+            // ---------------------------------------------------------
+            //  Q Head [1, 64]
+            // ---------------------------------------------------------
+            %q_head = cherry.tensor_slice %q[%c0_i64, %offset] sizes [1, 64]
+                : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x64xf32]>
+            
+            // ---------------------------------------------------------
+            //  K Head [1024, 64] -> [64, 1024]
+            // ---------------------------------------------------------
+            // start_indices: [0, offset]
+            %k_head = cherry.tensor_slice %k_layer_full[%c0_i64, %offset] sizes [1024, 64]
+                : (!cherry.cherry_tensor<[1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x64xf32]>
+            
+            %k_head_T = cherry.transpose %k_head perm [1, 0]
+                : (!cherry.cherry_tensor<[1024x64xf32]>) -> !cherry.cherry_tensor<[64x1024xf32]>
+            
+            // ---------------------------------------------------------
+            //  Masked Attention Score 
+            // ---------------------------------------------------------
+            // Q: [1, 64]
+            // K_T: [64, 1024]
+            // Mask: [1, 1024]
+            %score = cherry.masked_matmul %q_head, %k_head_T, %mask
+                : (!cherry.cherry_tensor<[1x64xf32]>, !cherry.cherry_tensor<[64x1024xf32]>, !cherry.cherry_tensor<[1x1024xf32]>) 
+                -> !cherry.cherry_tensor<[1x1024xf32]>
+            
+            %score_scaled = cherry.tensor_mul_scalar %score, %scale_val
+                : (!cherry.cherry_tensor<[1x1024xf32]>, f32) -> !cherry.cherry_tensor<[1x1024xf32]>
+            
+            %probs = cherry.softmax %score_scaled axis 1
+                : (!cherry.cherry_tensor<[1x1024xf32]>) -> !cherry.cherry_tensor<[1x1024xf32]>
+            
+            %v_head = cherry.tensor_slice %v_layer_full[%c0_i64, %offset] sizes [1024, 64]
+                : (!cherry.cherry_tensor<[1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x64xf32]>
+            
+            // Probs: [1, 1024]
+            // V_head: [1024, 64]
+            // Result: [1, 64]
+            %context_head = cherry.matmul %probs, %v_head
+                : (!cherry.cherry_tensor<[1x1024xf32]>, !cherry.cherry_tensor<[1024x64xf32]>) -> !cherry.cherry_tensor<[1x64xf32]>
+            
+            %next_att_out = cherry.tensor_set_slice %curr_att_out[%c0_i64, %offset], %context_head
+                : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[1x64xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
+                
+            scf.yield %next_att_out : !cherry.cherry_tensor<[1x768xf32]>
+        }
+                
         scf.yield %q, %next_k_cache, %next_v_cache : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
     }
     %wcls_reshape = cherry.reshape %wcls, %dim, %vocab_size
@@ -163,7 +217,7 @@ module {
         %mask = cherry.generate_mask %curr_pos, [1, 1024] : !cherry.cherry_tensor<[1x1024xf32]>
 
         %logits, %next_k_cache, %next_v_cache = cherry.call @llama_forward(
-            %curr_token, %curr_pos, %curr_k_cache, %curr_v_cache, %mask
+            %curr_token, %curr_pos, %curr_k_cache, %curr_v_cache, %mask,
             %embedding,
             %rms_att, %wq, %wk, %wv, %wo,
             %rms_ffn, %w1, %w2, %w3,

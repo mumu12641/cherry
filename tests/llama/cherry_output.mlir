@@ -1,45 +1,60 @@
 // Original IR loaded from file
 module {
-  cherry.func private @llama_forward(%arg0: i64, %arg1: i64, %arg2: !cherry.cherry_tensor<[12x1024x768xf32]>, %arg3: !cherry.cherry_tensor<[12x1024x768xf32]>, %arg4: !cherry.cherry_tensor<[32000x768xf32]>, %arg5: !cherry.cherry_tensor<[12x768xf32]>, %arg6: !cherry.cherry_tensor<[12x768x768xf32]>, %arg7: !cherry.cherry_tensor<[12x768x768xf32]>, %arg8: !cherry.cherry_tensor<[12x768x768xf32]>, %arg9: !cherry.cherry_tensor<[12x768x768xf32]>, %arg10: !cherry.cherry_tensor<[12x768xf32]>, %arg11: !cherry.cherry_tensor<[12x768x2048xf32]>, %arg12: !cherry.cherry_tensor<[12x2048x768xf32]>, %arg13: !cherry.cherry_tensor<[12x768x2048xf32]>, %arg14: !cherry.cherry_tensor<[1x768xf32]>, %arg15: !cherry.cherry_tensor<[32000x768xf32]>) -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
+  cherry.func private @llama_forward(%arg0: i64, %arg1: i64, %arg2: !cherry.cherry_tensor<[12x1024x768xf32]>, %arg3: !cherry.cherry_tensor<[12x1024x768xf32]>, %arg4: !cherry.cherry_tensor<[1x1024xf32]>, %arg5: !cherry.cherry_tensor<[32000x768xf32]>, %arg6: !cherry.cherry_tensor<[12x768xf32]>, %arg7: !cherry.cherry_tensor<[12x768x768xf32]>, %arg8: !cherry.cherry_tensor<[12x768x768xf32]>, %arg9: !cherry.cherry_tensor<[12x768x768xf32]>, %arg10: !cherry.cherry_tensor<[12x768x768xf32]>, %arg11: !cherry.cherry_tensor<[12x768xf32]>, %arg12: !cherry.cherry_tensor<[12x768x2048xf32]>, %arg13: !cherry.cherry_tensor<[12x2048x768xf32]>, %arg14: !cherry.cherry_tensor<[12x768x2048xf32]>, %arg15: !cherry.cherry_tensor<[1x768xf32]>, %arg16: !cherry.cherry_tensor<[32000x768xf32]>) -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
     %0 = cherry.constant(0 : i64) : i64
-    %1 = cherry.tensor_slice %arg4[%arg0, %0] sizes [1, 768] : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
+    %1 = cherry.tensor_slice %arg5[%arg0, %0] sizes [1, 768] : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %2 = cherry.constant(1 : i64) : i64
     %c12 = arith.constant 12 : index
     %3 = cherry.constant(768 : i64) : i64
-    %4 = cherry.constant(12 : i64) : i64
-    %5 = cherry.constant(64 : i64) : i64
-    %6 = cherry.constant(1.250000e-01 : f32) : f32
-    %7 = cherry.constant(1024 : i64) : i64
-    %8 = cherry.constant(32000 : i64) : i64
-    %9:3 = scf.for %arg16 = %c0 to %c12 step %c1 iter_args(%arg17 = %1, %arg18 = %arg2, %arg19 = %arg3) -> (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
-      %12 = arith.index_cast %arg16 : index to i64
-      %13 = cherry.tensor_slice %arg5[%12, %0] sizes [1, 768] : (!cherry.cherry_tensor<[12x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
-      %14 = cherry.reshape %13, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64) -> !cherry.cherry_tensor<[768xf32]>
-      %15 = cherry.rmsnorm %arg17 scale %14 eps 9.99999974E-6 : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768xf32]> -> !cherry.cherry_tensor<[1x768xf32]>
-      %16 = cherry.tensor_slice %arg6[%12, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
-      %17 = cherry.reshape %16, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
-      %18 = cherry.tensor_slice %arg7[%12, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
-      %19 = cherry.reshape %18, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
-      %20 = cherry.tensor_slice %arg8[%12, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
-      %21 = cherry.reshape %20, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
-      %22 = cherry.matmul %15, %17 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-      %23 = cherry.matmul %15, %19 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-      %24 = cherry.matmul %15, %21 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-      %25 = cherry.reshape %23, %2, %2, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1x768xf32]>
-      %26 = cherry.tensor_set_slice %arg18[%12, %arg1], %25 : (!cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[1x1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[12x1024x768xf32]>
-      %27 = cherry.reshape %24, %2, %2, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1x768xf32]>
-      %28 = cherry.tensor_set_slice %arg19[%12, %arg1], %27 : (!cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[1x1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[12x1024x768xf32]>
-      %29 = cherry.tensor_slice %26[%12, %0, %0] sizes [1, 1024, 768] : (!cherry.cherry_tensor<[12x1024x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1024x768xf32]>
-      %30 = cherry.reshape %29, %7, %3 : (!cherry.cherry_tensor<[1x1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x768xf32]>
-      %31 = cherry.tensor_slice %28[%12, %0, %0] sizes [1, 1024, 768] : (!cherry.cherry_tensor<[12x1024x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1024x768xf32]>
-      %32 = cherry.reshape %31, %7, %3 : (!cherry.cherry_tensor<[1x1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x768xf32]>
-      scf.yield %22, %26, %28 : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
+    %c12_0 = arith.constant 12 : index
+    %4 = cherry.constant(64 : i64) : i64
+    %5 = cherry.constant(1.250000e-01 : f32) : f32
+    %6 = cherry.constant(1024 : i64) : i64
+    %7 = cherry.constant(32000 : i64) : i64
+    %8:3 = scf.for %arg17 = %c0 to %c12 step %c1 iter_args(%arg18 = %1, %arg19 = %arg2, %arg20 = %arg3) -> (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
+      %11 = arith.index_cast %arg17 : index to i64
+      %12 = cherry.tensor_slice %arg6[%11, %0] sizes [1, 768] : (!cherry.cherry_tensor<[12x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
+      %13 = cherry.reshape %12, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64) -> !cherry.cherry_tensor<[768xf32]>
+      %14 = cherry.rmsnorm %arg18 scale %13 eps 9.99999974E-6 : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768xf32]> -> !cherry.cherry_tensor<[1x768xf32]>
+      %15 = cherry.tensor_slice %arg7[%11, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
+      %16 = cherry.reshape %15, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
+      %17 = cherry.tensor_slice %arg8[%11, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
+      %18 = cherry.reshape %17, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
+      %19 = cherry.tensor_slice %arg9[%11, %0, %0] sizes [1, 768, 768] : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
+      %20 = cherry.reshape %19, %3, %3 : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
+      %21 = cherry.matmul %14, %16 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+      %22 = cherry.matmul %14, %18 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+      %23 = cherry.matmul %14, %20 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+      %24 = cherry.reshape %22, %2, %2, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1x768xf32]>
+      %25 = cherry.tensor_set_slice %arg19[%11, %arg1], %24 : (!cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[1x1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[12x1024x768xf32]>
+      %26 = cherry.reshape %23, %2, %2, %3 : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1x768xf32]>
+      %27 = cherry.tensor_set_slice %arg20[%11, %arg1], %26 : (!cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[1x1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[12x1024x768xf32]>
+      %28 = cherry.tensor_slice %25[%11, %0, %0] sizes [1, 1024, 768] : (!cherry.cherry_tensor<[12x1024x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1024x768xf32]>
+      %29 = cherry.reshape %28, %6, %3 : (!cherry.cherry_tensor<[1x1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x768xf32]>
+      %30 = cherry.tensor_slice %27[%11, %0, %0] sizes [1, 1024, 768] : (!cherry.cherry_tensor<[12x1024x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1024x768xf32]>
+      %31 = cherry.reshape %30, %6, %3 : (!cherry.cherry_tensor<[1x1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x768xf32]>
+      %32 = cherry.create_tensor dense<0.000000e+00> : tensor<1x768xf32> -> !cherry.cherry_tensor<[1x768xf32]>
+      %33 = scf.for %arg21 = %c0 to %c12_0 step %c1 iter_args(%arg22 = %32) -> (!cherry.cherry_tensor<[1x768xf32]>) {
+        %34 = arith.index_cast %arg21 : index to i64
+        %35 = arith.muli %34, %4 : i64
+        %36 = cherry.tensor_slice %21[%0, %35] sizes [1, 64] : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x64xf32]>
+        %37 = cherry.tensor_slice %29[%0, %35] sizes [1024, 64] : (!cherry.cherry_tensor<[1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x64xf32]>
+        %38 = cherry.transpose %37 perm [1, 0] : (!cherry.cherry_tensor<[1024x64xf32]>) -> !cherry.cherry_tensor<[64x1024xf32]>
+        %39 = cherry.masked_matmul %36, %38, %arg4 : (!cherry.cherry_tensor<[1x64xf32]>, !cherry.cherry_tensor<[64x1024xf32]>, !cherry.cherry_tensor<[1x1024xf32]>) -> !cherry.cherry_tensor<[1x1024xf32]>
+        %40 = cherry.tensor_mul_scalar %39, %5 : (!cherry.cherry_tensor<[1x1024xf32]>, f32) -> !cherry.cherry_tensor<[1x1024xf32]>
+        %41 = cherry.softmax %40 axis 1 : (!cherry.cherry_tensor<[1x1024xf32]>) -> !cherry.cherry_tensor<[1x1024xf32]>
+        %42 = cherry.tensor_slice %31[%0, %35] sizes [1024, 64] : (!cherry.cherry_tensor<[1024x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1024x64xf32]>
+        %43 = cherry.matmul %41, %42 : (!cherry.cherry_tensor<[1x1024xf32]>, !cherry.cherry_tensor<[1024x64xf32]>) -> !cherry.cherry_tensor<[1x64xf32]>
+        %44 = cherry.tensor_set_slice %arg22[%0, %35], %43 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[1x64xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
+        scf.yield %44 : !cherry.cherry_tensor<[1x768xf32]>
+      }
+      scf.yield %21, %25, %27 : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
     }
-    %10 = cherry.reshape %arg15, %3, %8 : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x32000xf32]>
-    %11 = cherry.matmul %9#0, %10 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x32000xf32]>) -> !cherry.cherry_tensor<[1x32000xf32]>
-    cherry.return %11, %9#1, %9#2 : !cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
+    %9 = cherry.reshape %arg16, %3, %7 : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x32000xf32]>
+    %10 = cherry.matmul %8#0, %9 : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x32000xf32]>) -> !cherry.cherry_tensor<[1x32000xf32]>
+    cherry.return %10, %8#1, %8#2 : !cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
   }
   cherry.func @host() {
     %0 = cherry.create_tensor dense<2.000000e+00> : tensor<32000x768xf32> -> !cherry.cherry_tensor<[32000x768xf32]>
@@ -64,14 +79,15 @@ module {
       scf.condition(%18) %arg0, %arg1, %arg2, %arg3 : i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
     } do {
     ^bb0(%arg0: i64, %arg1: i64, %arg2: !cherry.cherry_tensor<[12x1024x768xf32]>, %arg3: !cherry.cherry_tensor<[12x1024x768xf32]>):
-      %18:3 = cherry.call @llama_forward(%arg0, %arg1, %arg2, %arg3, %0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11) : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[32000x768xf32]>, !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[32000x768xf32]>) -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>)
-      %19 = cherry.argmax %18#0 dim 1 : (!cherry.cherry_tensor<[1x32000xf32]>) -> !cherry.cherry_tensor<[1xi64]>
-      cherry.print %19 : !cherry.cherry_tensor<[1xi64]>
-      %20 = cherry.constant(0 : i64) : i64
-      %21 = cherry.tensor_get %19[%20] : (!cherry.cherry_tensor<[1xi64]>, i64) -> i64
-      %22 = cherry.constant(1 : i64) : i64
-      %23 = arith.addi %arg1, %22 : i64
-      scf.yield %21, %23, %18#1, %18#2 : i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
+      %18 = cherry.generate_mask %arg1, [1, 1024] : !cherry.cherry_tensor<[1x1024xf32]>
+      %19:3 = cherry.call @llama_forward(%arg0, %arg1, %arg2, %arg3, %18, %0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11) : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[1x1024xf32]>, !cherry.cherry_tensor<[32000x768xf32]>, !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[32000x768xf32]>) -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>)
+      %20 = cherry.argmax %19#0 dim 1 : (!cherry.cherry_tensor<[1x32000xf32]>) -> !cherry.cherry_tensor<[1xi64]>
+      cherry.print %20 : !cherry.cherry_tensor<[1xi64]>
+      %21 = cherry.constant(0 : i64) : i64
+      %22 = cherry.tensor_get %20[%21] : (!cherry.cherry_tensor<[1xi64]>, i64) -> i64
+      %23 = cherry.constant(1 : i64) : i64
+      %24 = arith.addi %arg1, %23 : i64
+      scf.yield %22, %24, %19#1, %19#2 : i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
     }
     cherry.return
   }

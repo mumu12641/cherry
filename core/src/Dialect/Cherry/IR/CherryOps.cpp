@@ -291,6 +291,42 @@ void TensorTanhOp::inferShapes()
     getResult().setType(getOperand().getType());
 }
 
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorScalarArithmeticOp
+//===----------------------------------------------------------------------===//
+// --------------------------------------------------------------------------
+// TensorAddScalarOp
+// --------------------------------------------------------------------------
+void TensorAddScalarOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
+
+// --------------------------------------------------------------------------
+// TensorSubScalarOp
+// --------------------------------------------------------------------------
+void TensorSubScalarOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
+
+// --------------------------------------------------------------------------
+// TensorMulScalarOp
+// --------------------------------------------------------------------------
+void TensorMulScalarOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
+
+// --------------------------------------------------------------------------
+// TensorDivScalarOp
+// --------------------------------------------------------------------------
+void TensorDivScalarOp::inferShapes()
+{
+    getResult().setType(getInput().getType());
+}
+
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::ArgmaxOp
 //===----------------------------------------------------------------------===//
@@ -349,31 +385,29 @@ void ReshapeOp::inferShapes()
 //===----------------------------------------------------------------------===//
 void TransposeOp::inferShapes()
 {
-    auto                          inputType   = cast<CherryTensorType>(getInput().getType());
-    auto                          inputShape  = inputType.getShape();
-    auto                          elementType = inputType.getElementType();
+    auto inputType   = cast<CherryTensorType>(getInput().getType());
+    auto inputShape  = inputType.getShape();
+    auto elementType = inputType.getElementType();
+
     llvm::SmallVector<int64_t, 4> outputShape;
 
-    for (auto permVal : getPermutation()) {
-        if (auto constantOp = permVal.getDefiningOp<ConstantOp>()) {
-            mlir::Attribute attr = constantOp.getValue();
-            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
-                int64_t index = intAttr.getInt();
-                assert(index >= 0 && index < (int64_t)inputShape.size());
-                outputShape.push_back(inputShape[index]);
-            }
-            else {
-                outputShape.push_back(mlir::ShapedType::kDynamic);
-            }
+    ArrayAttr permAttr = getPermutation();
+
+    for (auto attr : permAttr) {
+        auto    intAttr = dyn_cast<IntegerAttr>(attr);
+        int64_t index   = intAttr.getInt();
+        if (index >= 0 && index < (int64_t)inputShape.size()) {
+            outputShape.push_back(inputShape[index]);
         }
         else {
-            outputShape.push_back(mlir::ShapedType::kDynamic);
+            outputShape.push_back(ShapedType::kDynamic);
         }
     }
 
     auto resultType = mlir::cherry::CherryTensorType::get(getContext(), outputShape, elementType);
     getResult().setType(resultType);
 }
+
 
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::GenerateMaskOp

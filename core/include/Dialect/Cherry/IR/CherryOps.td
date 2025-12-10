@@ -233,6 +233,25 @@ def  Cherry_TensorTanhOp : Cherry_UnaryTensorOp<"tensor_tanh"> {
   let summary = "Element-wise tanh";
 }
 
+// Base class for Tensor-Scalar arithmetic ops
+class Cherry_TensorScalarArithmeticOp<string mnemonic, string desc> : Cherry_Op<mnemonic, [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Element-wise " # desc # " of tensor and scalar";
+  let description = [{
+    Computes element-wise }] # desc # [{ between a tensor and a scalar.
+    The scalar is broadcasted to match the tensor shape.
+  }];
+
+  let arguments = (ins AnyCherryTensor:$input, AnyType:$scalar);
+  let results = (outs AnyCherryTensor:$result);
+
+  let assemblyFormat = "$input `,` $scalar attr-dict `:` `(` type($input) `,` type($scalar) `)` `->` type($result)";
+}
+
+def Cherry_TensorAddScalarOp : Cherry_TensorScalarArithmeticOp<"tensor_add_scalar", "addition">;
+def Cherry_TensorSubScalarOp : Cherry_TensorScalarArithmeticOp<"tensor_sub_scalar", "subtraction">;
+def Cherry_TensorMulScalarOp : Cherry_TensorScalarArithmeticOp<"tensor_mul_scalar", "multiplication">;
+def Cherry_TensorDivScalarOp : Cherry_TensorScalarArithmeticOp<"tensor_div_scalar", "division">;
+
 
 //===----------------------------------------------------------------------===//
 // Tensor Reduction Operations
@@ -339,15 +358,15 @@ def Cherry_ReshapeOp : Cherry_Op<"reshape", [Pure, DeclareOpInterfaceMethods<Sha
 def Cherry_TransposeOp : Cherry_Op<"transpose", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Transpose tensor dimensions";
   let description = [{
-    Swaps tensor dimensions according to a permutation.
+    Swaps tensor dimensions according to a static permutation attribute.
     Example:
-      %transposed = cherry.transpose %input, %p0, %p1 : (!cherry.tensor<2x3xf32>, i64, i64) -> !cherry.tensor<3x2xf32>
+      %transposed = cherry.transpose %input perm [1, 0] : (!cherry.cherry_tensor<2x3xf32>) -> !cherry.cherry_tensor<3x2xf32>
   }];
 
-  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$permutation);
+  let arguments = (ins AnyCherryTensor:$input, I64ArrayAttr:$permutation);
   let results = (outs AnyCherryTensor:$result);
 
-  let assemblyFormat = "$input (`,` $permutation^)? attr-dict `:` `(` type($input) (`,` type($permutation)^)? `)` `->` type($result)";
+  let assemblyFormat = "$input `perm` $permutation attr-dict `:` `(` type($input) `)` `->` type($result)";
 }
 
 // ===----------------------------------------------------------------------===//
