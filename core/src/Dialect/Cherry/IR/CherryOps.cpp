@@ -376,6 +376,48 @@ void TransposeOp::inferShapes()
 }
 
 //===----------------------------------------------------------------------===//
+// ::mlir::cherry::GenerateMaskOp
+//===----------------------------------------------------------------------===//
+void GenerateMaskOp::inferShapes()
+{
+    auto                          shapeAttr = getShapeAttr();
+    llvm::SmallVector<int64_t, 4> outputShape;
+    for (auto attr : shapeAttr) {
+        auto intAttr = dyn_cast<IntegerAttr>(attr);
+        auto dim     = intAttr.getInt();
+        outputShape.push_back(dim);
+    }
+    auto resultType =
+        CherryTensorType::get(getContext(), outputShape, FloatType::getF32(getContext()));
+    getResult().setType(resultType);
+}
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::MatMulOp
+//===----------------------------------------------------------------------===//
+void MaskedMatMulOp::inferShapes()
+{
+    auto lhsType = cast<mlir::cherry::CherryTensorType>(getLhs().getType());
+    auto rhsType = cast<mlir::cherry::CherryTensorType>(getRhs().getType());
+
+    auto lhsShape = lhsType.getShape();
+    auto rhsShape = rhsType.getShape();
+
+    assert(lhsShape.size() >= 2 || rhsShape.size() >= 2);
+
+    llvm::SmallVector<int64_t, 4> outputShape;
+    size_t                        batchRank = lhsShape.size() - 2;
+    for (size_t i = 0; i < batchRank; ++i) {
+        outputShape.push_back(lhsShape[i]);
+    }
+    outputShape.push_back(lhsShape[lhsShape.size() - 2]);
+    outputShape.push_back(rhsShape[rhsShape.size() - 1]);
+    auto resultType =
+        mlir::cherry::CherryTensorType::get(getContext(), outputShape, lhsType.getElementType());
+    getResult().setType(resultType);
+}
+
+//===----------------------------------------------------------------------===//
 // ::mlir::cherry::MatMulOp
 //===----------------------------------------------------------------------===//
 void MatMulOp::inferShapes()

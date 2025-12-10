@@ -1,0 +1,5 @@
+ninja mlir_c_runner_utils
+ninja mlir_runner_utils
+/home/nx/ycy/pb/cherry/build/third_party/llvm-project/llvm/bin/clang++ /home/nx/ycy/pb/cherry/tests/llama/main.cpp /home/nx/ycy/pb/cherry/tests/llama/cherry_output.ll -o runner -O3 -Lthird_party/llvm-project/llvm/lib -lmlir_c_runner_utils -lmlir_runner_utils -Wl,-rpath,$(pwd)/third_party/llvm-project/llvm/lib
+
+/home/nx/ycy/pb/cherry/build/third_party/llvm-project/llvm/bin/clang++ /home/nx/ycy/pb/cherry/tests/llama/main.cpp /home/nx/ycy/pb/cherry/tests/components/test_masked_matmul_output.ll -o /home/nx/ycy/pb/cherry/tests/components/test_masked_matmul -O3 -Lthird_party/llvm-project/llvm/lib -lmlir_c_runner_utils -lmlir_runner_utils -Wl,-rpath,$(pwd)/third_party/llvm-project/llvm/lib

@@ -8,6 +8,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Utils/StructuredOpsUtils.h"
 #include "mlir/IR/AffineExpr.h"
@@ -19,20 +20,6 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/TypeRange.h"
-// 核心转换框架
-#include "mlir/Transforms/DialectConversion.h"
-
-// [关键] SCF 结构化转换模式 (populateSCFStructuralTypeConversionsAndLegality)
-#include "mlir/Dialect/SCF/Transforms/Patterns.h"
-
-// 用于 Materialization (UnrealizedConversionCastOp)
-#include "mlir/IR/BuiltinOps.h"
-
-// 涉及到的标准 Dialects
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -615,6 +602,202 @@ struct ReshapeOpLowering : public OpConversionPattern<ReshapeOp>
 };
 
 // ===----------------------------------------------------------------------===//
+// mlir::cherry::GenerateMaskOp lowering
+// ===----------------------------------------------------------------------===//
+struct GenerateMaskOpLowering : public OpConversionPattern<GenerateMaskOp>
+{
+    using OpConversionPattern<GenerateMaskOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(GenerateMaskOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto loc = op.getLoc();
+        Value boundary = adaptor.getBoundary(); 
+        
+        auto resultType = cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto elemType = resultType.getElementType();
+        
+        ArrayAttr shapeAttr = op.getShape();
+        SmallVector<int64_t> staticShape;
+        for (auto attr : shapeAttr) {
+            staticShape.push_back(cast<IntegerAttr>(attr).getInt());
+        }
+        
+        int64_t rank = staticShape.size();
+
+        Value initTensor = rewriter.create<tensor::EmptyOp>(
+            loc, staticShape, elemType);
+
+        SmallVector<AffineMap, 1> indexingMaps = {
+            rewriter.getMultiDimIdentityMap(rank)
+        };
+
+        SmallVector<utils::IteratorType> iteratorTypes(rank, utils::IteratorType::parallel);
+
+        rewriter.replaceOpWithNewOp<linalg::GenericOp>(
+            op,
+            TypeRange{resultType},
+            ValueRange{},           // inputs: none
+            ValueRange{initTensor}, // outputs
+            indexingMaps,
+            iteratorTypes,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                int64_t lastDim = rank - 1; 
+                Value idx = b.create<linalg::IndexOp>(loc, lastDim);
+                Value idxI64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), idx);
+
+                // idx <= boundary
+                Value cond = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sle, idxI64, boundary);
+
+                Value one = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 1.0));
+                Value zero = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 0.0));
+                Value res = b.create<arith::SelectOp>(loc, cond, one, zero);
+
+                b.create<linalg::YieldOp>(loc, res);
+            });
+
+        return success();
+    }
+};
+
+
+// ===----------------------------------------------------------------------===//
+// mlir::cherry::MaskedMatMulOp lowering
+// ===----------------------------------------------------------------------===//
+struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
+{
+    using OpConversionPattern<MaskedMatMulOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(MaskedMatMulOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto  loc  = op.getLoc();
+        Value lhs  = adaptor.getLhs();
+        Value rhs  = adaptor.getRhs();
+        Value mask = adaptor.getMask();
+
+        auto lhsType  = cast<RankedTensorType>(lhs.getType());
+        auto rhsType  = cast<RankedTensorType>(rhs.getType());
+        auto maskType = cast<RankedTensorType>(mask.getType());
+        auto resultType =
+            cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        auto elemType = resultType.getElementType();
+
+        // 2. 计算 Rank 和维度索引
+        int64_t lhsRank = lhsType.getRank();
+        int64_t rhsRank = rhsType.getRank();
+        int64_t outRank = resultType.getRank();
+
+        int64_t lhsBatchRank = lhsRank - 2;
+        int64_t rhsBatchRank = rhsRank - 2;
+        int64_t outBatchRank = outRank - 2;
+        // Total Loops: Batch + M + N + K
+        int64_t totalLoopRank = outBatchRank + 3;
+
+        int64_t idxM = totalLoopRank - 3;   // index of M
+        int64_t idxN = totalLoopRank - 2;   // index of N
+        int64_t idxK = totalLoopRank - 1;   // index of K
+
+        // 3. 构建 Affine Maps
+        SmallVector<AffineExpr> lhsExprs;
+        SmallVector<AffineExpr> rhsExprs;
+        SmallVector<AffineExpr> maskExprs;   // Mask Map
+        SmallVector<AffineExpr> outExprs;
+
+        // LHS Map: [Batch, M, K]
+        int64_t lhsBatchOffset = outBatchRank - lhsBatchRank;
+        for (int i = 0; i < lhsBatchRank; ++i) {
+            lhsExprs.push_back(rewriter.getAffineDimExpr(i + lhsBatchOffset));
+        }
+        lhsExprs.push_back(rewriter.getAffineDimExpr(idxM));
+        lhsExprs.push_back(rewriter.getAffineDimExpr(idxK));
+
+        // RHS Map: [Batch, K, N]
+        int64_t rhsBatchOffset = outBatchRank - rhsBatchRank;
+        for (int i = 0; i < rhsBatchRank; ++i) {
+            rhsExprs.push_back(rewriter.getAffineDimExpr(i + rhsBatchOffset));
+        }
+        rhsExprs.push_back(rewriter.getAffineDimExpr(idxK));
+        rhsExprs.push_back(rewriter.getAffineDimExpr(idxN));
+
+        // Mask/Out Map: [Batch, M, N]
+        // Mask 和 Output 的维度是一样的，都不包含 K
+        for (int i = 0; i < outBatchRank; ++i) {
+            auto expr = rewriter.getAffineDimExpr(i);
+            outExprs.push_back(expr);
+            maskExprs.push_back(expr);
+        }
+        outExprs.push_back(rewriter.getAffineDimExpr(idxM));
+        outExprs.push_back(rewriter.getAffineDimExpr(idxN));
+
+        maskExprs.push_back(rewriter.getAffineDimExpr(idxM));
+        maskExprs.push_back(rewriter.getAffineDimExpr(idxN));
+
+        SmallVector<AffineMap, 4> indexingMaps = {
+            AffineMap::get(totalLoopRank, 0, lhsExprs, rewriter.getContext()),
+            AffineMap::get(totalLoopRank, 0, rhsExprs, rewriter.getContext()),
+            AffineMap::get(totalLoopRank, 0, maskExprs, rewriter.getContext()),   // Add Mask Map
+            AffineMap::get(totalLoopRank, 0, outExprs, rewriter.getContext())};
+
+        // 4. Iterator Types: Parallel (Batch, M, N), Reduction (K)
+        SmallVector<utils::IteratorType> iteratorTypes(totalLoopRank,
+                                                       utils::IteratorType::parallel);
+        iteratorTypes[idxK] = utils::IteratorType::reduction;
+
+        // 5. 初始化 Output Tensor (用 0.0 初始化)
+        // 注意：虽然 Mask=0 时我们要 -inf，但 Mask=1 时我们需要正常的累加，所以初始值必须是 0.0
+        Value initTensor = rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elemType);
+
+        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
+
+        Value zeroInit = rewriter.create<linalg::FillOp>(loc, zero, initTensor).getResult(0);
+
+        // 6. 创建 linalg.generic
+        rewriter.replaceOpWithNewOp<linalg::GenericOp>(
+            op,
+            TypeRange{resultType},
+            ValueRange{lhs, rhs, mask},   // Inputs: LHS, RHS, Mask
+            ValueRange{zeroInit},         // Outputs
+            indexingMaps,
+            iteratorTypes,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value l   = args[0];
+                Value r   = args[1];
+                Value m   = args[2];   // Mask Value
+                Value acc = args[3];
+
+                // 1. 计算乘法
+                Value mul = b.create<arith::MulFOp>(loc, l, r);
+                // 2. 计算累加 (Standard MatMul)
+                Value sum = b.create<arith::AddFOp>(loc, acc, mul);
+
+                // 3. Mask 逻辑
+                // 定义 -inf
+                // float -inf: 0xFF800000 (float32)
+                Value negInf = b.create<arith::ConstantOp>(
+                    loc, b.getFloatAttr(elemType, -1.0e9));   // 或者使用真正的 -inf
+
+                // 判断 Mask 是否有效 (Mask == 1.0)
+                // 建议使用 > 0.5 比较，防止浮点精度问题
+                Value threshold = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 0.5));
+                Value isValid =
+                    b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT, m, threshold);
+
+                // 4. Select
+                // 如果 Mask 有效 -> 返回 sum
+                // 如果 Mask 无效 -> 返回 -inf
+                // 因为 m 在 K 维度是不变的，一旦无效，整个 Reduction 过程都会 yield -inf
+                Value res = b.create<arith::SelectOp>(loc, isValid, sum, negInf);
+
+                b.create<linalg::YieldOp>(loc, res);
+            });
+
+        return success();
+    }
+};
+
+
+// ===----------------------------------------------------------------------===//
 // mlir::cherry::MatMulOp lowering
 // (x*y*z*m*k) X (y*z*k*n) => x*y*z*m*n
 // A X B => C
@@ -1127,18 +1310,29 @@ struct PrintOpLowering : public OpConversionPattern<PrintOp>
                                   ConversionPatternRewriter& rewriter) const override
     {
         ModuleOp module = op->getParentOfType<ModuleOp>();
-        Value    input  = adaptor.getInput();   // 已经是 tensor<...> 类型了
+        Value    input  = adaptor.getInput();
 
-        // 我们统一使用 unranked tensor 作为打印函数的参数，
-        // 这样同一个打印函数可以处理所有形状。
-        // 在 Bufferization 后，这会变成 UnrankedMemRef。
-        auto tensorType         = cast<RankedTensorType>(input.getType());
+        auto tensorType  = cast<RankedTensorType>(input.getType());
+        Type elementType = tensorType.getElementType();
+
         auto unrankedTensorType = UnrankedTensorType::get(tensorType.getElementType());
 
-        // 1. 获取或创建打印函数的声明
-        // 函数签名: (tensor<*xf32>) -> ()
-        std::string funcName = "print_memref_f32";
-        // 如果是 int64，可以用 "print_memref_i64"
+        std::string funcName;
+        if (elementType.isF32()) {
+            funcName = "printMemrefF32";
+        }
+        else if (elementType.isF64()) {
+            funcName = "printMemrefF64";
+        }
+        else if (elementType.isInteger(32)) {
+            funcName = "printMemrefI32";
+        }
+        else if (elementType.isInteger(64)) {
+            funcName = "printMemrefI64";
+        }
+        if (funcName.empty()) {
+            return rewriter.notifyMatchFailure(op, "Unsupported element type for print operation");
+        }
 
         if (!module.lookupSymbol<func::FuncOp>(funcName)) {
             OpBuilder::InsertionGuard guard(rewriter);
@@ -1151,12 +1345,9 @@ struct PrintOpLowering : public OpConversionPattern<PrintOp>
             funcOp.setArgAttr(0, "bufferization.access", rewriter.getStringAttr("read"));
         }
 
-        // 2. 将 Ranked Tensor Cast 为 Unranked Tensor
-        // 这一步是为了匹配函数签名
         Value unrankedInput =
             rewriter.create<tensor::CastOp>(op.getLoc(), unrankedTensorType, input);
 
-        // 3. 创建 Call Op
         rewriter.replaceOpWithNewOp<func::CallOp>(
             op, funcName, TypeRange{}, ValueRange{unrankedInput});
 
@@ -1217,6 +1408,8 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::ArgMaxOp>();
     target.addIllegalOp<cherry::TransposeOp>();
     target.addIllegalOp<cherry::ReshapeOp>();
+    target.addIllegalOp<cherry::GenerateMaskOp>();
+    target.addIllegalOp<cherry::MaskedMatMulOp>();
     target.addIllegalOp<cherry::MatMulOp>();
     target.addIllegalOp<cherry::SoftmaxOp>();
     target.addIllegalOp<cherry::BroadcastOp>();
@@ -1252,7 +1445,9 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
                  TransposeOpLowering,
                  ReshapeOpLowering,
-
+                
+                 GenerateMaskOpLowering,
+                 MaskedMatMulOpLowering,
                  MatMulOpLowering,
                  SoftmaxOpLowering,
                  BroadcastOpLowering,
