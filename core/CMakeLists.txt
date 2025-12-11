@@ -33,4 +33,7 @@ target_link_libraries(cherry
         MLIRIndexToLLVM  
         LLVMCore    
         
+        mlir_c_runner_utils
+        mlir_runner_utils
+        
 )

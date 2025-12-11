@@ -192,7 +192,192 @@ struct TensorSetSliceOpLowering : public OpConversionPattern<TensorSetSliceOp>
     }
 };
 
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::RopeOp lowering
+//===----------------------------------------------------------------------===//
+struct RopeOpLowering : public OpConversionPattern<RopeOp>
+{
+    using OpConversionPattern<RopeOp>::OpConversionPattern;
 
+    LogicalResult matchAndRewrite(RopeOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        Location loc   = op.getLoc();
+        Value    input = adaptor.getInput();
+        Value    pos   = adaptor.getPos();
+
+        auto    inputType = cast<RankedTensorType>(input.getType());
+        int64_t rank      = inputType.getRank();
+        auto    shape     = inputType.getShape();
+        int64_t dim       = shape[rank - 1];   // Head Dimension
+        int64_t halfDim   = dim / 2;
+
+        if (dim % 2 != 0) return op.emitError("RoPE requires last dimension to be even");
+
+        Type elemType = inputType.getElementType();
+
+        // Generate cos & sin Table [halfDim]
+        // angle[i] = pos * 10000^(-2i/dim)
+        // cosTable[i] = cos(angle[i])
+        // sinTable[i] = sin(angle[i])
+        Value cosTableInit =
+            rewriter.create<tensor::EmptyOp>(loc, ArrayRef<int64_t>{halfDim}, elemType);
+        Value sinTableInit =
+            rewriter.create<tensor::EmptyOp>(loc, ArrayRef<int64_t>{halfDim}, elemType);
+        Value                     posF32 = rewriter.create<arith::UIToFPOp>(loc, elemType, pos);
+        SmallVector<AffineMap, 2> maps   = {rewriter.getMultiDimIdentityMap(1),
+                                            rewriter.getMultiDimIdentityMap(1)};
+
+        SmallVector<utils::IteratorType> iterators = {utils::IteratorType::parallel};
+
+        auto tablesOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            TypeRange{cosTableInit.getType(), sinTableInit.getType()},   
+            ValueRange{},                                                
+            ValueRange{cosTableInit, sinTableInit},                      
+            maps,
+            iterators,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value i    = b.create<linalg::IndexOp>(loc, 0);
+                Value iI64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), i);
+                Value iF32 = b.create<arith::UIToFPOp>(loc, elemType, iI64);
+
+                Value c10000 = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 10000.0));
+                Value cDim =
+                    b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, (double)dim));
+                Value cMinus2 = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, -2.0));
+
+                // theta = 10000 ^ (-2*i / dim)
+                Value exponent_nom = b.create<arith::MulFOp>(loc, cMinus2, iF32);
+                Value exponent     = b.create<arith::DivFOp>(loc, exponent_nom, cDim);
+                Value theta        = b.create<math::PowFOp>(loc, c10000, exponent);
+
+                // angle = pos * theta
+                Value angle = b.create<arith::MulFOp>(loc, posF32, theta);
+
+                Value cosVal = b.create<math::CosOp>(loc, angle);
+                Value sinVal = b.create<math::SinOp>(loc, angle);
+
+                b.create<linalg::YieldOp>(loc, ValueRange{cosVal, sinVal});
+            });
+
+        Value cosTable = tablesOp.getResult(0);
+        Value sinTable = tablesOp.getResult(1);
+
+        // expand input : 1 * 12 * 64 -> 1 * 12 * 32 * 2
+        SmallVector<int64_t> expandedShape(shape.begin(), shape.end());
+        expandedShape[rank - 1] = halfDim;
+        expandedShape.push_back(2);
+        auto expandedType = RankedTensorType::get(expandedShape, elemType);
+        SmallVector<ReassociationIndices> reassoc(rank);
+        for (int i = 0; i < rank - 1; ++i) reassoc[i] = {i};
+        reassoc[rank - 1] = {rank - 1, rank};
+        Value inputExp = rewriter.create<tensor::ExpandShapeOp>(loc, expandedType, input, reassoc);
+
+        // Extract Even/Odd slices
+        // Even: [..., :, 0] 1 * 12 * 32 * 1,
+        // Odd: [..., :, 1] 1 * 12 * 32 * 1
+        SmallVector<OpFoldResult> offsets(rank + 1, rewriter.getIndexAttr(0));
+        SmallVector<OpFoldResult> sizes;
+        SmallVector<OpFoldResult> strides(rank + 1, rewriter.getIndexAttr(1));
+        for (int i = 0; i < rank; ++i) {
+            sizes.push_back(rewriter.getIndexAttr(expandedType.getDimSize(i)));
+        }
+        sizes.push_back(rewriter.getIndexAttr(1));
+
+        // Extract Even
+        offsets.back() = rewriter.getIndexAttr(0);
+        Value evenSlice =
+            rewriter.create<tensor::ExtractSliceOp>(loc, inputExp, offsets, sizes, strides);
+
+        SmallVector<ReassociationIndices> collapseReassoc(rank);
+        for (int i = 0; i < rank; ++i) collapseReassoc[i] = {i};
+        collapseReassoc[rank - 1].push_back(rank);   // Merge last two
+
+        // 1 * 12 * 32
+        Value evenFlat = rewriter.create<tensor::CollapseShapeOp>(loc, evenSlice, collapseReassoc);
+
+        offsets.back() = rewriter.getIndexAttr(1);
+        Value oddSlice =
+            rewriter.create<tensor::ExtractSliceOp>(loc, inputExp, offsets, sizes, strides);
+        // 1 * 12 * 32
+        Value oddFlat = rewriter.create<tensor::CollapseShapeOp>(loc, oddSlice, collapseReassoc);
+
+
+        // Apply Rotation
+        // Inputs: evenFlat [1 * 12 * 32], oddFlat [1 * 12 * 32], cos [32], sin [32]
+        // Output: resEven [1 * 12 * 32], resOdd [1 * 12 * 32]
+
+        // [1 * 12 * 32]
+        Value resInit = rewriter.create<tensor::EmptyOp>(
+            loc, cast<RankedTensorType>(evenFlat.getType()).getShape(), elemType);
+
+        // 3
+        int64_t   flatRank    = rank;
+        AffineMap identityMap = rewriter.getMultiDimIdentityMap(flatRank);
+        AffineMap broadcastMap =
+            AffineMap::get(flatRank, 0, rewriter.getAffineDimExpr(flatRank - 1), op.getContext());
+
+        SmallVector<AffineMap, 6> rotateMaps = {
+            identityMap,    // even
+            identityMap,    // odd
+            broadcastMap,   // cos [32]
+            broadcastMap,   // sin [32]
+            identityMap,    // out_even
+            identityMap     // out_odd
+        };
+        SmallVector<utils::IteratorType> rotateIterators(flatRank, utils::IteratorType::parallel);
+
+        auto rotateOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            TypeRange{resInit.getType(), resInit.getType()},   // 2 outputs
+            ValueRange{evenFlat, oddFlat, cosTable, sinTable},
+            ValueRange{resInit, resInit},
+            rotateMaps,
+            rotateIterators,
+            [&](OpBuilder& b, Location loc, ValueRange args) {
+                Value even = args[0];
+                Value odd  = args[1];
+                Value cos  = args[2];
+                Value sin  = args[3];
+
+                // out_even = e * c - o * s
+                Value evenMulCos = b.create<arith::MulFOp>(loc, even, cos);
+                Value oddMulSin  = b.create<arith::MulFOp>(loc, odd, sin);
+                Value outEven    = b.create<arith::SubFOp>(loc, evenMulCos, oddMulSin);
+
+                // out_odd = o * c + e * s
+                Value oddMulCos  = b.create<arith::MulFOp>(loc, odd, cos);
+                Value evenMulSin = b.create<arith::MulFOp>(loc, even, sin);
+                Value outOdd     = b.create<arith::AddFOp>(loc, oddMulCos, evenMulSin);
+
+                b.create<linalg::YieldOp>(loc, ValueRange{outEven, outOdd});
+            });
+        // 1 * 12 *32
+        Value resEven = rotateOp.getResult(0);
+        Value resOdd  = rotateOp.getResult(1);
+
+        // Merge
+        Value resEvenExp = rewriter.create<tensor::ExpandShapeOp>(
+            loc, evenSlice.getType(), resEven, collapseReassoc);
+        Value resOddExp = rewriter.create<tensor::ExpandShapeOp>(
+            loc, oddSlice.getType(), resOdd, collapseReassoc);
+
+        Value resultInit = rewriter.create<tensor::EmptyOp>(loc, expandedType.getShape(), elemType);
+
+        offsets.back() = rewriter.getIndexAttr(0);
+        Value merged1  = rewriter.create<tensor::InsertSliceOp>(
+            loc, resEvenExp, resultInit, offsets, sizes, strides);
+
+        offsets.back() = rewriter.getIndexAttr(1);
+        Value merged2  = rewriter.create<tensor::InsertSliceOp>(
+            loc, resOddExp, merged1, offsets, sizes, strides);
+
+        rewriter.replaceOpWithNewOp<tensor::CollapseShapeOp>(op, merged2, reassoc);
+
+        return success();
+    }
+};
 
 // ===----------------------------------------------------------------------===//
 // mlir::cherry::TensorGetOp lowering
@@ -731,28 +916,24 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
             cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
         auto elemType = resultType.getElementType();
 
-        // 2. 计算 Rank 和维度索引
         int64_t lhsRank = lhsType.getRank();
         int64_t rhsRank = rhsType.getRank();
         int64_t outRank = resultType.getRank();
 
-        int64_t lhsBatchRank = lhsRank - 2;
-        int64_t rhsBatchRank = rhsRank - 2;
-        int64_t outBatchRank = outRank - 2;
-        // Total Loops: Batch + M + N + K
+        int64_t lhsBatchRank  = lhsRank - 2;
+        int64_t rhsBatchRank  = rhsRank - 2;
+        int64_t outBatchRank  = outRank - 2;
         int64_t totalLoopRank = outBatchRank + 3;
 
         int64_t idxM = totalLoopRank - 3;   // index of M
         int64_t idxN = totalLoopRank - 2;   // index of N
         int64_t idxK = totalLoopRank - 1;   // index of K
 
-        // 3. 构建 Affine Maps
         SmallVector<AffineExpr> lhsExprs;
         SmallVector<AffineExpr> rhsExprs;
         SmallVector<AffineExpr> maskExprs;   // Mask Map
         SmallVector<AffineExpr> outExprs;
 
-        // LHS Map: [Batch, M, K]
         int64_t lhsBatchOffset = outBatchRank - lhsBatchRank;
         for (int i = 0; i < lhsBatchRank; ++i) {
             lhsExprs.push_back(rewriter.getAffineDimExpr(i + lhsBatchOffset));
@@ -760,7 +941,6 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
         lhsExprs.push_back(rewriter.getAffineDimExpr(idxM));
         lhsExprs.push_back(rewriter.getAffineDimExpr(idxK));
 
-        // RHS Map: [Batch, K, N]
         int64_t rhsBatchOffset = outBatchRank - rhsBatchRank;
         for (int i = 0; i < rhsBatchRank; ++i) {
             rhsExprs.push_back(rewriter.getAffineDimExpr(i + rhsBatchOffset));
@@ -768,8 +948,6 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
         rhsExprs.push_back(rewriter.getAffineDimExpr(idxK));
         rhsExprs.push_back(rewriter.getAffineDimExpr(idxN));
 
-        // Mask/Out Map: [Batch, M, N]
-        // Mask 和 Output 的维度是一样的，都不包含 K
         for (int i = 0; i < outBatchRank; ++i) {
             auto expr = rewriter.getAffineDimExpr(i);
             outExprs.push_back(expr);
@@ -787,20 +965,17 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
             AffineMap::get(totalLoopRank, 0, maskExprs, rewriter.getContext()),   // Add Mask Map
             AffineMap::get(totalLoopRank, 0, outExprs, rewriter.getContext())};
 
-        // 4. Iterator Types: Parallel (Batch, M, N), Reduction (K)
         SmallVector<utils::IteratorType> iteratorTypes(totalLoopRank,
                                                        utils::IteratorType::parallel);
         iteratorTypes[idxK] = utils::IteratorType::reduction;
 
-        // 5. 初始化 Output Tensor (用 0.0 初始化)
-        // 注意：虽然 Mask=0 时我们要 -inf，但 Mask=1 时我们需要正常的累加，所以初始值必须是 0.0
+        // init Output Tensor with 0.0
         Value initTensor = rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elemType);
 
         Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
 
         Value zeroInit = rewriter.create<linalg::FillOp>(loc, zero, initTensor).getResult(0);
 
-        // 6. 创建 linalg.generic
         rewriter.replaceOpWithNewOp<linalg::GenericOp>(
             op,
             TypeRange{resultType},
@@ -814,27 +989,15 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
                 Value m   = args[2];   // Mask Value
                 Value acc = args[3];
 
-                // 1. 计算乘法
                 Value mul = b.create<arith::MulFOp>(loc, l, r);
-                // 2. 计算累加 (Standard MatMul)
                 Value sum = b.create<arith::AddFOp>(loc, acc, mul);
 
-                // 3. Mask 逻辑
-                // 定义 -inf
-                // float -inf: 0xFF800000 (float32)
-                Value negInf = b.create<arith::ConstantOp>(
-                    loc, b.getFloatAttr(elemType, -1.0e9));   // 或者使用真正的 -inf
+                Value negInf = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, -1.0e9));
 
-                // 判断 Mask 是否有效 (Mask == 1.0)
-                // 建议使用 > 0.5 比较，防止浮点精度问题
                 Value threshold = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 0.5));
                 Value isValid =
                     b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT, m, threshold);
 
-                // 4. Select
-                // 如果 Mask 有效 -> 返回 sum
-                // 如果 Mask 无效 -> 返回 -inf
-                // 因为 m 在 K 维度是不变的，一旦无效，整个 Reduction 过程都会 yield -inf
                 Value res = b.create<arith::SelectOp>(loc, isValid, sum, negInf);
 
                 b.create<linalg::YieldOp>(loc, res);
@@ -981,7 +1144,6 @@ struct SoftmaxOpLowering : public OpConversionPattern<SoftmaxOp>
 
         auto inputType =
             cast<RankedTensorType>(this->typeConverter->convertType(op.getInput().getType()));
-        llvm::outs() << "inputType: " << inputType << "\n";
         auto    elemType = inputType.getElementType();
         int64_t rank     = inputType.getRank();
 
@@ -1435,6 +1597,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::CreateTensorOp>();
     target.addIllegalOp<cherry::TensorSliceOp>();
     target.addIllegalOp<cherry::TensorSetSliceOp>();
+    target.addIllegalOp<cherry::RopeOp>();
     target.addIllegalOp<cherry::TensorGetOp>();
     target.addIllegalOp<cherry::TensorSetOp>();
     target.addIllegalOp<cherry::ReturnOp>();
@@ -1472,6 +1635,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
                  CreateTensorOpLowering,
                  TensorSliceOpLowering,
                  TensorSetSliceOpLowering,
+                 RopeOpLowering,
                  TensorGetOpLowering,
                  TensorSetOpLowering,
 

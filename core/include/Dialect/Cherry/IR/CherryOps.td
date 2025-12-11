@@ -96,6 +96,25 @@ def Cherry_TensorSetSliceOp : Cherry_Op<"tensor_set_slice", [Pure, DeclareOpInte
   let assemblyFormat = "$dest `[` $indices `]` `,` $source attr-dict `:` functional-type(operands, results)";
 }
 
+def Cherry_RopeOp : Cherry_Op<"rope", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "Apply Rotary Positional Embedding (RoPE) with internal embedding generation";
+  let description = [{
+    Applies RoPE to the input tensor based on the provided position.
+    
+    Arguments:
+      input: The tensor to be rotated. Last dimension (head_dim) must be even.
+      pos: The position index (i64 scalar).
+      
+    The operation internally generates the cos/sin tables:
+      theta_i = 10000^(-2*i/dim)
+      angle_i = pos * theta_i
+  }];
+
+  let arguments = (ins AnyCherryTensor:$input, I64:$pos);
+  let results = (outs AnyCherryTensor:$result);
+
+  let assemblyFormat = "$input `,` $pos attr-dict `:` functional-type(operands, results)";
+}
 
 
 // =============================================================================
