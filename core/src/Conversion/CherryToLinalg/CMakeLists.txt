@@ -13,6 +13,8 @@ add_mlir_conversion_library(CherryToLinalg
   MLIRMathDialect
   MLIRSCFDialect
   MLIRTensorDialect
+  MLIRBufferizationDialect
+  MLIRMemRefDialect
   CherryDialect
   MLIRPass
   MLIRIR      

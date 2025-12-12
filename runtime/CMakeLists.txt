@@ -1,0 +1,1 @@
+add_library(cherry_runtime STATIC runtime.cpp)

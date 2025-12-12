@@ -4,9 +4,11 @@
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -91,45 +93,6 @@ struct CreateTensorOpLowering : public OpConversionPattern<CreateTensorOp>
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::WeightOpLowering lowering
 //===----------------------------------------------------------------------===//
-LogicalResult readTensorFromFile(Location loc, StringRef filepath, ArrayRef<int64_t> expectedShape,
-                                 std::vector<char>& outRawBytes)
-{
-    std::ifstream f(filepath.str(), std::ios::binary);
-    if (!f.is_open()) return emitError(loc, "Error: Cannot open weight file: ") << filepath;
-
-
-    int ndim;
-    if (!f.read(reinterpret_cast<char*>(&ndim), sizeof(int)))
-        return emitError(loc, "Failed to read ndim");
-    std::vector<int> fileShape(ndim);
-    if (!f.read(reinterpret_cast<char*>(fileShape.data()), ndim * sizeof(int)))
-        return emitError(loc, "Failed to read shape data");
-
-    if (ndim != expectedShape.size())
-        return emitError(loc) << "Shape rank mismatch. File: " << ndim
-                              << ", Expected: " << expectedShape.size();
-
-    int64_t numElements = 1;
-    for (int i = 0; i < ndim; ++i) {
-        if (fileShape[i] != expectedShape[i])
-            return emitError(loc) << "Dimension mismatch at index " << i
-                                  << ". File: " << fileShape[i]
-                                  << ", Expected: " << expectedShape[i];
-
-        numElements *= fileShape[i];
-    }
-
-    // Read Data
-    size_t bytesToRead = numElements * sizeof(float);
-    outRawBytes.resize(bytesToRead);
-
-    if (!f.read(outRawBytes.data(), bytesToRead))
-        return emitError(loc, "Failed to read tensor data (unexpected EOF)");
-
-    f.close();
-    return success();
-}
-
 struct WeightOpLowering : public OpConversionPattern<WeightOp>
 {
     using OpConversionPattern<WeightOp>::OpConversionPattern;
@@ -137,35 +100,66 @@ struct WeightOpLowering : public OpConversionPattern<WeightOp>
     LogicalResult matchAndRewrite(WeightOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        StringRef            path        = op.getPath();
-        Type                 elementType = op.getElemType();
-        SmallVector<int64_t> shape;
-        if (auto shapeAttr = op.getShape()) {
-            for (auto dim : shapeAttr.getAsRange<IntegerAttr>()) {
-                shape.push_back(dim.getInt());
+        ModuleOp  module      = op->getParentOfType<ModuleOp>();
+        auto      loc         = op.getLoc();
+        StringRef path        = op.getPath();
+        Type      elementType = op.getElemType();
+        auto      resultType =
+            cast<RankedTensorType>(typeConverter->convertType(op.getOutput().getType()));
+        auto memrefType = MemRefType::get(resultType.getShape(), elementType);
+
+        int         rank     = resultType.getRank();
+        std::string funcName = "cherry_read_weight_" + std::to_string(rank) + "d";
+        for (auto dim : resultType.getShape()) {
+            funcName += "_" + std::to_string(dim);
+        }
+        if (elementType.isF32())
+            funcName += "_f32";
+        else
+            return rewriter.notifyMatchFailure(op, "Unsupported element type");
+
+        std::vector<int8_t> pathData(path.begin(), path.end());
+        pathData.push_back(0);   // C-style string terminator
+
+        auto staticStringType =
+            RankedTensorType::get({(int64_t)pathData.size()}, rewriter.getI8Type());
+        auto  pathAttr  = DenseElementsAttr::get(staticStringType, llvm::ArrayRef(pathData));
+        Value pathConst = rewriter.create<arith::ConstantOp>(loc, pathAttr);
+
+        auto dynamicStringType =
+            RankedTensorType::get({ShapedType::kDynamic}, rewriter.getI8Type());
+        Value pathTensor = rewriter.create<tensor::CastOp>(loc, dynamicStringType, pathConst);
+
+        SmallVector<Value> args;
+        args.push_back(pathTensor);
+        for (auto dim : resultType.getShape()) {
+            args.push_back(rewriter.create<arith::ConstantIntOp>(loc, dim, 64));
+        }
+
+        if (!module.lookupSymbol<func::FuncOp>(funcName)) {
+            OpBuilder::InsertionGuard guard(rewriter);
+            rewriter.setInsertionPointToStart(module.getBody());
+
+            SmallVector<Type> inputTypes;
+            inputTypes.push_back(dynamicStringType);
+            for (int i = 0; i < rank; ++i) {
+                inputTypes.push_back(rewriter.getI64Type());
             }
+            auto funcType = rewriter.getFunctionType(inputTypes, {memrefType});
+
+            auto funcOp = rewriter.create<func::FuncOp>(module.getLoc(), funcName, funcType);
+            funcOp.setPrivate();
+            funcOp.setArgAttr(0, "bufferization.access", rewriter.getStringAttr("read"));
         }
 
-        std::vector<char> rawBytes;
-        if (failed(readTensorFromFile(op.getLoc(), path, shape, rawBytes))) {
-            return failure();
-        }
+        auto  callOp       = rewriter.create<func::CallOp>(op.getLoc(), funcName, memrefType, args);
+        Value loadedMemref = callOp.getResult(0);
 
-        DenseElementsAttr denseAttr;
-        auto              tensorType = RankedTensorType::get(shape, elementType);
-        if (elementType.isF32()) {
-            ArrayRef<float> floatData(reinterpret_cast<const float*>(rawBytes.data()),
-                                      rawBytes.size() / sizeof(float));
-            denseAttr = DenseElementsAttr::get(tensorType, floatData);
-        }
-        else {
-            return emitError(op.getLoc(), "Unsupported element type in WeightOp: ") << elementType;
-        }
-        rewriter.replaceOpWithNewOp<arith::ConstantOp>(op, denseAttr);
-
+        rewriter.replaceOpWithNewOp<bufferization::ToTensorOp>(op, resultType, loadedMemref, true);
         return success();
     }
 };
+
 
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::TensorSliceOp lowering
@@ -1670,8 +1664,10 @@ void ConvertCherryToLinalgPass::runOnOperation()
                            func::FuncDialect,
                            tensor::TensorDialect,
                            arith::ArithDialect,
-                           math::MathDialect>();
-    target.addLegalDialect<scf::SCFDialect>();   // 先设为 legal，然后下面添加动态规则覆盖它
+                           math::MathDialect,
+                           bufferization::BufferizationDialect,
+                           memref::MemRefDialect>();
+    target.addLegalDialect<scf::SCFDialect>();
     target.addDynamicallyLegalDialect<scf::SCFDialect>(
         [&](Operation* op) { return converter.isLegal(op); });
 

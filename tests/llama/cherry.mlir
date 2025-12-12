@@ -316,8 +316,8 @@ module {
             -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>)
             
         %arg_max = cherry.argmax %logits dim 1 : (!cherry.cherry_tensor<[1x32000xf32]>) -> (!cherry.cherry_tensor<[1xi64]>)
-        cherry.print %logits : !cherry.cherry_tensor<[1x32000xf32]>
-        // cherry.print %arg_max : !cherry.cherry_tensor<[1xi64]>
+        //cherry.print %logits : !cherry.cherry_tensor<[1x32000xf32]>
+        cherry.print %arg_max : !cherry.cherry_tensor<[1xi64]>
         
         %zero = cherry.constant (0 : i64) : i64
         %next_token = cherry.tensor_get %arg_max [%zero] : (!cherry.cherry_tensor<[1xi64]>, i64) -> i64

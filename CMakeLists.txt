@@ -39,3 +39,4 @@ set(NS_MLIR_TRANSFORM_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/cherry_include.mlir")
 
 add_subdirectory(core)
 add_subdirectory(utils)
+add_subdirectory(runtime)
