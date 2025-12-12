@@ -266,24 +266,24 @@ module {
 
   cherry.func @host(){
     // Embedding
-    %embedding = cherry.create_tensor dense<2.0> : tensor<32000x768xf32> -> !cherry.cherry_tensor<[32000x768xf32]>
+    %embedding = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/token_embeddings.bin" shape[32000, 768] type f32 -> !cherry.cherry_tensor<[32000x768xf32]>
     
     // Attention Weights (12 layers)
-    %rms_att = cherry.create_tensor dense<3.0> : tensor<12x768xf32> -> !cherry.cherry_tensor<[12x768xf32]>
-    %wq = cherry.create_tensor dense<4.0> : tensor<12x768x768xf32> -> !cherry.cherry_tensor<[12x768x768xf32]>
-    %wk = cherry.create_tensor dense<5.0> : tensor<12x768x768xf32> -> !cherry.cherry_tensor<[12x768x768xf32]>
-    %wv = cherry.create_tensor dense<6.0> : tensor<12x768x768xf32> -> !cherry.cherry_tensor<[12x768x768xf32]>
-    %wo = cherry.create_tensor dense<7.0> : tensor<12x768x768xf32> -> !cherry.cherry_tensor<[12x768x768xf32]>
+    %rms_att = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_rms_att_weight.bin" shape[12, 768] type f32 -> !cherry.cherry_tensor<[12x768xf32]>
+    %wq = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wq.bin" shape[12, 768, 768] type f32 -> !cherry.cherry_tensor<[12x768x768xf32]>
+    %wk = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wk.bin" shape[12, 768, 768] type f32 -> !cherry.cherry_tensor<[12x768x768xf32]>
+    %wv = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wv.bin" shape[12, 768, 768] type f32 -> !cherry.cherry_tensor<[12x768x768xf32]>
+    %wo = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wo.bin" shape[12, 768, 768] type f32 -> !cherry.cherry_tensor<[12x768x768xf32]>
     
     // FFN Weights (12 layers)
-    %rms_ffn = cherry.create_tensor dense<8.0> : tensor<12x768xf32> -> !cherry.cherry_tensor<[12x768xf32]>
-    %w1 = cherry.create_tensor dense<9.0> : tensor<12x768x2048xf32> -> !cherry.cherry_tensor<[12x768x2048xf32]>
-    %w2 = cherry.create_tensor dense<10.0> : tensor<12x2048x768xf32> -> !cherry.cherry_tensor<[12x2048x768xf32]>
-    %w3 = cherry.create_tensor dense<11.0> : tensor<12x768x2048xf32> -> !cherry.cherry_tensor<[12x768x2048xf32]>
+    %rms_ffn = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_rms_ffn_weight.bin" shape[12, 768] type f32 -> !cherry.cherry_tensor<[12x768xf32]>
+    %w1 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w1.bin" shape[12, 768, 2048] type f32 -> !cherry.cherry_tensor<[12x768x2048xf32]>
+    %w2 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w2.bin" shape[12, 2048, 768] type f32 -> !cherry.cherry_tensor<[12x2048x768xf32]>
+    %w3 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w3.bin" shape[12, 768, 2048] type f32 -> !cherry.cherry_tensor<[12x768x2048xf32]>
     
     // Final Weights
-    %rms_final = cherry.create_tensor dense<12.0> : tensor<768xf32> -> !cherry.cherry_tensor<[768xf32]>
-    %wcls = cherry.create_tensor dense<13.0> : tensor<32000x768xf32> -> !cherry.cherry_tensor<[32000x768xf32]>
+    %rms_final = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/final_rms_norm.bin" shape[768] type f32 -> !cherry.cherry_tensor<[768xf32]>
+    %wcls = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/output_wcls.bin" shape[32000, 768] type f32 -> !cherry.cherry_tensor<[32000x768xf32]>
     
     // KV Cache (Initialize with Zeros)
     %k_cache_init = cherry.create_tensor dense<0.0> : tensor<12x1024x768xf32> -> !cherry.cherry_tensor<[12x1024x768xf32]>

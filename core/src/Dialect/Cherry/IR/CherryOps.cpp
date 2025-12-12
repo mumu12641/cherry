@@ -182,6 +182,22 @@ void FuncOp::print(mlir::OpAsmPrinter& p)
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::TensorSliceOp
 //===----------------------------------------------------------------------===//
+void WeightOp::inferShapes()
+{
+    auto                 shape = getShapeAttr();
+    int64_t              rank  = shape.size();
+    SmallVector<int64_t> outputShape;
+    for (auto attr : shape) {
+        auto    intAttr = dyn_cast<IntegerAttr>(attr);
+        int64_t size    = intAttr.getInt();
+        outputShape.push_back(size);
+    }
+    getResult().setType(CherryTensorType::get(getContext(), outputShape, getElemType()));
+}
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::TensorSliceOp
+//===----------------------------------------------------------------------===//
 void TensorSliceOp::inferShapes()
 {
     auto                 loc       = getLoc();
@@ -210,7 +226,8 @@ void TensorSetSliceOp::inferShapes()
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::RopeOp
 //===----------------------------------------------------------------------===//
-void RopeOp::inferShapes() {
+void RopeOp::inferShapes()
+{
     getResult().setType(getInput().getType());
 }
 

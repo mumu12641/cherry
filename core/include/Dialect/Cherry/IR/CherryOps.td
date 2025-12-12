@@ -51,6 +51,28 @@ def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure]> {
   let assemblyFormat = "$value attr-dict `->` type($result)";
 }
 
+def WeightOp : Cherry_Op<"weight", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+    let summary = "Load weight from binary file at compile time";
+    let description = [{
+        Reads a binary file with the specific format (ndim, shape, data) 
+        and converts it into an arith.constant dense tensor.
+    }];
+
+    let arguments = (ins 
+        StrAttr:$path,
+        I64ArrayAttr:$shape,
+        TypeAttr:$elem_type 
+
+    );
+
+    let results = (outs AnyCherryTensor:$output);
+
+    let assemblyFormat = [{
+        $path `shape` $shape `type` $elem_type attr-dict `->` type($output)
+    }];
+}
+
+
 // =============================================================================
 // Tensor Slice Op
 // Extract sub-tensor slice with static sizes and dynamic offsets.

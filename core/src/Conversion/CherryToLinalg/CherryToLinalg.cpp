@@ -26,11 +26,15 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include <fstream>
+#include <vector>
 
 namespace mlir::cherry {
 #define GEN_PASS_DEF_CONVERTCHERRYTOLINALGPASS
@@ -80,6 +84,85 @@ struct CreateTensorOpLowering : public OpConversionPattern<CreateTensorOp>
         auto valueAttr  = op.getValue();
         auto targetType = typeConverter->convertType(op.getResult().getType());
         rewriter.replaceOpWithNewOp<arith::ConstantOp>(op, targetType, valueAttr);
+        return success();
+    }
+};
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::WeightOpLowering lowering
+//===----------------------------------------------------------------------===//
+LogicalResult readTensorFromFile(Location loc, StringRef filepath, ArrayRef<int64_t> expectedShape,
+                                 std::vector<char>& outRawBytes)
+{
+    std::ifstream f(filepath.str(), std::ios::binary);
+    if (!f.is_open()) return emitError(loc, "Error: Cannot open weight file: ") << filepath;
+
+
+    int ndim;
+    if (!f.read(reinterpret_cast<char*>(&ndim), sizeof(int)))
+        return emitError(loc, "Failed to read ndim");
+    std::vector<int> fileShape(ndim);
+    if (!f.read(reinterpret_cast<char*>(fileShape.data()), ndim * sizeof(int)))
+        return emitError(loc, "Failed to read shape data");
+
+    if (ndim != expectedShape.size())
+        return emitError(loc) << "Shape rank mismatch. File: " << ndim
+                              << ", Expected: " << expectedShape.size();
+
+    int64_t numElements = 1;
+    for (int i = 0; i < ndim; ++i) {
+        if (fileShape[i] != expectedShape[i])
+            return emitError(loc) << "Dimension mismatch at index " << i
+                                  << ". File: " << fileShape[i]
+                                  << ", Expected: " << expectedShape[i];
+
+        numElements *= fileShape[i];
+    }
+
+    // Read Data
+    size_t bytesToRead = numElements * sizeof(float);
+    outRawBytes.resize(bytesToRead);
+
+    if (!f.read(outRawBytes.data(), bytesToRead))
+        return emitError(loc, "Failed to read tensor data (unexpected EOF)");
+
+    f.close();
+    return success();
+}
+
+struct WeightOpLowering : public OpConversionPattern<WeightOp>
+{
+    using OpConversionPattern<WeightOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(WeightOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        StringRef            path        = op.getPath();
+        Type                 elementType = op.getElemType();
+        SmallVector<int64_t> shape;
+        if (auto shapeAttr = op.getShape()) {
+            for (auto dim : shapeAttr.getAsRange<IntegerAttr>()) {
+                shape.push_back(dim.getInt());
+            }
+        }
+
+        std::vector<char> rawBytes;
+        if (failed(readTensorFromFile(op.getLoc(), path, shape, rawBytes))) {
+            return failure();
+        }
+
+        DenseElementsAttr denseAttr;
+        auto              tensorType = RankedTensorType::get(shape, elementType);
+        if (elementType.isF32()) {
+            ArrayRef<float> floatData(reinterpret_cast<const float*>(rawBytes.data()),
+                                      rawBytes.size() / sizeof(float));
+            denseAttr = DenseElementsAttr::get(tensorType, floatData);
+        }
+        else {
+            return emitError(op.getLoc(), "Unsupported element type in WeightOp: ") << elementType;
+        }
+        rewriter.replaceOpWithNewOp<arith::ConstantOp>(op, denseAttr);
+
         return success();
     }
 };
@@ -232,9 +315,9 @@ struct RopeOpLowering : public OpConversionPattern<RopeOp>
 
         auto tablesOp = rewriter.create<linalg::GenericOp>(
             loc,
-            TypeRange{cosTableInit.getType(), sinTableInit.getType()},   
-            ValueRange{},                                                
-            ValueRange{cosTableInit, sinTableInit},                      
+            TypeRange{cosTableInit.getType(), sinTableInit.getType()},
+            ValueRange{},
+            ValueRange{cosTableInit, sinTableInit},
             maps,
             iterators,
             [&](OpBuilder& b, Location loc, ValueRange args) {
@@ -1595,6 +1678,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
     target.addIllegalOp<cherry::ConstantOp>();
     target.addIllegalOp<cherry::CreateTensorOp>();
+    target.addIllegalOp<cherry::WeightOp>();
     target.addIllegalOp<cherry::TensorSliceOp>();
     target.addIllegalOp<cherry::TensorSetSliceOp>();
     target.addIllegalOp<cherry::RopeOp>();
@@ -1633,6 +1717,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
     patterns.add<ConstantOpLowering,
                  CreateTensorOpLowering,
+                 WeightOpLowering,
                  TensorSliceOpLowering,
                  TensorSetSliceOpLowering,
                  RopeOpLowering,
