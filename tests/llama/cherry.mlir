@@ -22,9 +22,9 @@ module {
       
       // FFN Weights [n_layers, ...]
       %rms_ffn_weight: !cherry.cherry_tensor<[12x768xf32]>,
-      %w1: !cherry.cherry_tensor<[12x768x2048xf32]>, // Gate
-      %w2: !cherry.cherry_tensor<[12x2048x768xf32]>, // Down
-      %w3: !cherry.cherry_tensor<[12x768x2048xf32]>, // Up
+      %w1: !cherry.cherry_tensor<[12x2048x768xf32]>, // Gate
+      %w2: !cherry.cherry_tensor<[12x768x2048xf32]>, // Down
+      %w3: !cherry.cherry_tensor<[12x2048x768xf32]>, // Up
       
       // Final Weights
       %rms_final_weight: !cherry.cherry_tensor<[768xf32]>,
@@ -37,7 +37,7 @@ module {
     %c0_i64 = cherry.constant (0 : i64) : i64
     %x = cherry.tensor_slice %embedding_table[%token_id, %c0_i64] sizes [1, 768] 
          : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
-         
+    
     %c0 = arith.constant 0 : index
     %c1 = arith.constant 1 : index
     %constant_1 = cherry.constant (1 : i64) : i64
@@ -67,7 +67,7 @@ module {
         %rms_att_w_layer_1 = cherry.tensor_slice %rms_att_weight[%layer, %c0_i64] sizes [1, 768]
             : (!cherry.cherry_tensor<[12x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
         %rms_att_w_layer = cherry.reshape %rms_att_w_layer_1, %dim : (!cherry.cherry_tensor<[1x768xf32]>, i64) -> !cherry.cherry_tensor<[768xf32]>
-            
+
         %xb = cherry.rmsnorm %curr_x scale %rms_att_w_layer eps 1.000000e-05
             : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768xf32]> -> !cherry.cherry_tensor<[1x768xf32]>
         
@@ -88,9 +88,12 @@ module {
             
         // MatMul: [1, 768] x [768, 768] -> [1, 768]
         // Note: Assuming MatMulOp handles broadcasting or squeezing of the first dim of weights
-        %q_raw = cherry.matmul %xb, %wq_layer : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-        %k_raw = cherry.matmul %xb, %wk_layer : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-        %v_raw = cherry.matmul %xb, %wv_layer : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+        %wq_layer_transposed = cherry.transpose %wq_layer perm [1, 0] : (!cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[768x768xf32]>
+        %q_raw = cherry.matmul %xb, %wq_layer_transposed : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+        %wk_layer_transposed = cherry.transpose %wk_layer perm [1, 0] : (!cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[768x768xf32]>
+        %k_raw = cherry.matmul %xb, %wk_layer_transposed : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
+        %wv_layer_transposed = cherry.transpose %wv_layer perm [1, 0] : (!cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[768x768xf32]>
+        %v = cherry.matmul %xb, %wv_layer_transposed : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
 
         // A.3 RoPE (Rotary Positional Embedding)
         // TODO
@@ -102,9 +105,10 @@ module {
         %k_rope = cherry.rope %k_raw_heads, %pos : (!cherry.cherry_tensor<[1x12x64xf32]>, i64) -> !cherry.cherry_tensor<[1x12x64xf32]>
         %k = cherry.reshape %k_rope, %constant_1, %dim : (!cherry.cherry_tensor<[1x12x64xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
 
-        %v_raw_heads = cherry.reshape %v_raw, %constant_1, %head_num, %head_dim : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x12x64xf32]>
-        %v_rope = cherry.rope %v_raw_heads, %pos : (!cherry.cherry_tensor<[1x12x64xf32]>, i64) -> !cherry.cherry_tensor<[1x12x64xf32]>
-        %v = cherry.reshape %v_rope, %constant_1, %dim : (!cherry.cherry_tensor<[1x12x64xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
+        
+        // %v_raw_heads = cherry.reshape %v_raw, %constant_1, %head_num, %head_dim : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x12x64xf32]>
+        // %v_rope = cherry.rope %v_raw_heads, %pos : (!cherry.cherry_tensor<[1x12x64xf32]>, i64) -> !cherry.cherry_tensor<[1x12x64xf32]>
+        // %v = cherry.reshape %v_rope, %constant_1, %dim : (!cherry.cherry_tensor<[1x12x64xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
 
         // A.4 Update KV Cache
         %k_1 = cherry.reshape %k, %constant_1, %constant_1, %dim : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x1x768xf32]>
@@ -192,10 +196,10 @@ module {
         %wo_layer_1 = cherry.tensor_slice %wo[%layer, %c0_i64, %c0_i64] sizes [1, 768, 768]
             : (!cherry.cherry_tensor<[12x768x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x768xf32]>
         %wo_layer = cherry.reshape %wo_layer_1, %dim, %dim : (!cherry.cherry_tensor<[1x768x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x768xf32]>
-
-        %xb2 = cherry.matmul %att_out_final, %wo_layer 
+        %wo_layer_transposed = cherry.transpose %wo_layer perm [1, 0] : (!cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[768x768xf32]>
+        %xb2 = cherry.matmul %att_out_final, %wo_layer_transposed 
             : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
-        
+
         // A.7 Residual Connection: x = x + xb2
         %x_resid_1 = cherry.tensor_add %curr_x, %xb2 
             : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[1x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
@@ -214,17 +218,19 @@ module {
         
         // B.2 Projections (Gate w1, Up w3)
         // w1: [768, 2048], w3: [768, 2048]
-        %w1_layer_1 = cherry.tensor_slice %w1[%layer, %c0_i64, %c0_i64] sizes [1, 768, 2048]
-             : (!cherry.cherry_tensor<[12x768x2048xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x2048xf32]>
-        %w1_layer = cherry.reshape %w1_layer_1, %dim, %ffn_dim : (!cherry.cherry_tensor<[1x768x2048xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x2048xf32]>
+        %w1_layer_1 = cherry.tensor_slice %w1[%layer, %c0_i64, %c0_i64] sizes [1, 2048, 768]
+             : (!cherry.cherry_tensor<[12x2048x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x2048x768xf32]>
+        %w1_layer = cherry.reshape %w1_layer_1, %dim, %ffn_dim : (!cherry.cherry_tensor<[1x2048x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[2048x768xf32]>
+        %w1_layer_transposed = cherry.transpose %w1_layer perm [1, 0] : (!cherry.cherry_tensor<[2048x768xf32]>) -> !cherry.cherry_tensor<[768x2048xf32]>
         
-        %w3_layer_1 = cherry.tensor_slice %w3[%layer, %c0_i64, %c0_i64] sizes [1, 768, 2048]
-             : (!cherry.cherry_tensor<[12x768x2048xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x2048xf32]>
-        %w3_layer = cherry.reshape %w3_layer_1, %dim, %ffn_dim : (!cherry.cherry_tensor<[1x768x2048xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x2048xf32]>
-        
-        %hb = cherry.matmul %xb_ffn, %w1_layer 
+        %w3_layer_1 = cherry.tensor_slice %w3[%layer, %c0_i64, %c0_i64] sizes [1, 2048, 768]
+             : (!cherry.cherry_tensor<[12x2048x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x2048x768xf32]>
+        %w3_layer = cherry.reshape %w3_layer_1, %dim, %ffn_dim : (!cherry.cherry_tensor<[1x2048x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[2048x768xf32]>
+        %w3_layer_transposed = cherry.transpose %w3_layer perm [1, 0] : (!cherry.cherry_tensor<[2048x768xf32]>) -> !cherry.cherry_tensor<[768x2048xf32]>
+
+        %hb = cherry.matmul %xb_ffn, %w1_layer_transposed 
             : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x2048xf32]>) -> !cherry.cherry_tensor<[1x2048xf32]>
-        %hb2 = cherry.matmul %xb_ffn, %w3_layer 
+        %hb2 = cherry.matmul %xb_ffn, %w3_layer_transposed
             : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x2048xf32]>) -> !cherry.cherry_tensor<[1x2048xf32]>
             
         // B.3 Activation (SiLU)
@@ -236,11 +242,11 @@ module {
         
         // B.5 Down Projection (w2)
         // w2: [2048, 768]
-        %w2_layer_1 = cherry.tensor_slice %w2[%layer, %c0_i64, %c0_i64] sizes [1, 2048, 768]
-             : (!cherry.cherry_tensor<[12x2048x768xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x2048x768xf32]>
-        %w2_layer = cherry.reshape %w2_layer_1, %ffn_dim, %dim : (!cherry.cherry_tensor<[1x2048x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[2048x768xf32]>
-
-        %ffn_out = cherry.matmul %hb_mul, %w2_layer
+        %w2_layer_1 = cherry.tensor_slice %w2[%layer, %c0_i64, %c0_i64] sizes [1, 768, 2048]
+             : (!cherry.cherry_tensor<[12x768x2048xf32]>, i64, i64, i64) -> !cherry.cherry_tensor<[1x768x2048xf32]>
+        %w2_layer = cherry.reshape %w2_layer_1, %ffn_dim, %dim : (!cherry.cherry_tensor<[1x768x2048xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x2048xf32]>
+        %w2_layer_transposed = cherry.transpose %w2_layer perm [1, 0] : (!cherry.cherry_tensor<[768x2048xf32]>) -> !cherry.cherry_tensor<[2048x768xf32]>
+        %ffn_out = cherry.matmul %hb_mul, %w2_layer_transposed
             : (!cherry.cherry_tensor<[1x2048xf32]>, !cherry.cherry_tensor<[2048x768xf32]>) -> !cherry.cherry_tensor<[1x768xf32]>
 
         // B.6 Residual Connection
@@ -255,10 +261,9 @@ module {
     // logits = matmul(x, wcls)
     %x_norm = cherry.rmsnorm %x_final scale %rms_final_weight eps 1.000000e-05
         : !cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768xf32]> -> !cherry.cherry_tensor<[1x768xf32]>
-
-    %wcls_reshape = cherry.reshape %wcls, %dim, %vocab_size
-        : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[768x32000xf32]>
-    %logits = cherry.matmul %x_norm, %wcls_reshape
+    %wcls_transposed = cherry.transpose %wcls perm [1, 0]
+        : (!cherry.cherry_tensor<[32000x768xf32]>) -> !cherry.cherry_tensor<[768x32000xf32]>
+    %logits = cherry.matmul %x_norm, %wcls_transposed
         : (!cherry.cherry_tensor<[1x768xf32]>, !cherry.cherry_tensor<[768x32000xf32]>) -> !cherry.cherry_tensor<[1x32000xf32]>
 
     cherry.return %logits, %k_cache_final, %v_cache_final : !cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>
@@ -267,7 +272,7 @@ module {
   cherry.func @host(){
     // Embedding
     %embedding = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/token_embeddings.bin" shape[32000, 768] type f32 -> !cherry.cherry_tensor<[32000x768xf32]>
-    
+
     // Attention Weights (12 layers)
     %rms_att = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_rms_att_weight.bin" shape[12, 768] type f32 -> !cherry.cherry_tensor<[12x768xf32]>
     %wq = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wq.bin" shape[12, 768, 768] type f32 -> !cherry.cherry_tensor<[12x768x768xf32]>
@@ -277,9 +282,9 @@ module {
     
     // FFN Weights (12 layers)
     %rms_ffn = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_rms_ffn_weight.bin" shape[12, 768] type f32 -> !cherry.cherry_tensor<[12x768xf32]>
-    %w1 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w1.bin" shape[12, 768, 2048] type f32 -> !cherry.cherry_tensor<[12x768x2048xf32]>
-    %w2 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w2.bin" shape[12, 2048, 768] type f32 -> !cherry.cherry_tensor<[12x2048x768xf32]>
-    %w3 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w3.bin" shape[12, 768, 2048] type f32 -> !cherry.cherry_tensor<[12x768x2048xf32]>
+    %w1 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w1.bin" shape[12, 2048, 768] type f32 -> !cherry.cherry_tensor<[12x2048x768xf32]>
+    %w2 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w2.bin" shape[12, 768, 2048] type f32 -> !cherry.cherry_tensor<[12x768x2048xf32]>
+    %w3 = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/layers_w3.bin" shape[12, 2048, 768] type f32 -> !cherry.cherry_tensor<[12x2048x768xf32]>
     
     // Final Weights
     %rms_final = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/final_rms_norm.bin" shape[768] type f32 -> !cherry.cherry_tensor<[768xf32]>
@@ -291,7 +296,7 @@ module {
     
     %start_token = cherry.constant (1 : i64) : i64
     %start_pos = cherry.constant (0 : i64) : i64
-    %max_len = cherry.constant (10 : i64) : i64   
+    %max_len = cherry.constant (180 : i64) : i64   
     
     %final_token, %final_pos, %final_k_cache, %final_v_cache = scf.while (%arg_token = %start_token, %arg_pos = %start_pos, %arg_k_cache = %k_cache_init, %arg_v_cache = %v_cache_init) 
           : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) -> (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
@@ -311,7 +316,7 @@ module {
         ) : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>,!cherry.cherry_tensor<[1x1024xf32]>,
              !cherry.cherry_tensor<[32000x768xf32]>,
              !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>,
-             !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>,
+             !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>,
              !cherry.cherry_tensor<[768xf32]>, !cherry.cherry_tensor<[32000x768xf32]>) 
             -> (!cherry.cherry_tensor<[1x32000xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>)
             

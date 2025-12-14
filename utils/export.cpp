@@ -174,9 +174,9 @@ int main(int argc, char* argv[])
     SAVE_AND_ADVANCE("layers_wv", 3, config.n_layers, config.dim, config.n_kv_heads * head_size);
     SAVE_AND_ADVANCE("layers_wo", 3, config.n_layers, config.n_heads * head_size, config.dim);
     SAVE_AND_ADVANCE("layers_rms_ffn_weight", 2, config.n_layers, config.dim);
-    SAVE_AND_ADVANCE("layers_w1", 3, config.n_layers, config.dim, config.hidden_dim);
-    SAVE_AND_ADVANCE("layers_w2", 3, config.n_layers, config.hidden_dim, config.dim);
-    SAVE_AND_ADVANCE("layers_w3", 3, config.n_layers, config.dim, config.hidden_dim);
+    SAVE_AND_ADVANCE("layers_w1", 3, config.n_layers, config.hidden_dim, config.dim);
+    SAVE_AND_ADVANCE("layers_w2", 3, config.n_layers, config.dim, config.hidden_dim);
+    SAVE_AND_ADVANCE("layers_w3", 3, config.n_layers, config.hidden_dim, config.dim);
     SAVE_AND_ADVANCE("final_rms_norm", 1, config.dim);
 
     if (shared_weights) {

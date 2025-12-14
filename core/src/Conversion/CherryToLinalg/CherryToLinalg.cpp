@@ -654,9 +654,11 @@ struct TensorSiluOpLowering : public OpConversionPattern<TensorSiluOp>
             iteratorTypes,
 
             [&](OpBuilder& builder, Location loc, ValueRange args) {
+                Value one = builder.create<arith::ConstantOp>(
+                    loc, builder.getF32Type(), builder.getFloatAttr(builder.getF32Type(), 1.0f));
                 Value neg = builder.create<arith::NegFOp>(loc, args[0]);
                 Value exp = builder.create<math::ExpOp>(loc, neg);
-                Value den = builder.create<arith::AddFOp>(loc, args[0], exp);
+                Value den = builder.create<arith::AddFOp>(loc, one, exp);
                 Value res = builder.create<arith::DivFOp>(loc, args[0], den);
                 builder.create<linalg::YieldOp>(loc, res);
             });

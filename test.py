@@ -1,68 +1,56 @@
-import struct
+import torch
 import numpy as np
-import os
 
-def load_tensor(filepath):
-    """
-    读取由 C 语言 save_tensor 函数生成的二进制文件。
-    格式: [ndim (int)] + [shape (int array)] + [data (float array)]
-    """
-    if not os.path.exists(filepath):
-        print(f"❌ Error: File not found: {filepath}")
-        return None
-
-    with open(filepath, 'rb') as f:
-        # 1. 读取 ndim (int, 4 bytes)
-        # 'i' 代表 C 语言的 int
-        ndim_bytes = f.read(4)
-        if not ndim_bytes:
-            return None
-        ndim = struct.unpack('i', ndim_bytes)[0]
-
-        # 2. 读取 shape (int array, ndim * 4 bytes)
-        shape_bytes = f.read(4 * ndim)
-        # '{ndim}i' 表示读取 ndim 个整数
-        shape = struct.unpack(f'{ndim}i', shape_bytes)
-
-        # 3. 读取 data (float array)
-        # 使用 numpy 直接从文件流剩余部分读取 float32 (对应 C 的 float)
-        # 这样比 struct.unpack 快得多，特别是对于大数组
-        data = np.frombuffer(f.read(), dtype=np.float32)
-
-    # 4. 根据 shape 重塑数组
-    try:
-        tensor = data.reshape(shape)
-        print(f"✅ Loaded: {filepath}")
-        print(f"   Shape: {shape}")
-        print(f"   Dtype: {tensor.dtype}")
-        return tensor
-    except ValueError as e:
-        print(f"❌ Error reshaping data: {e}")
-        print(f"   Expected elements: {np.prod(shape)}")
-        print(f"   Actual elements: {data.size}")
-        return None
-
-# =================使用示例=================
-if __name__ == "__main__":
-    # 假设你的文件名为 output.bin
-    file_path = "/home/nx/ycy/pb/cherry/utils/stories110M/output_wcls.bin" 
+def solve_llama_shape_mismatch():
+    dim = 768
     
-    # 如果你没有文件，先生成一个模拟文件测试
-    # (仅用于演示，实际使用时请直接读取你的文件)
-    # import struct
-    # with open(file_path, 'wb') as f:
-    #     ndim = 2
-    #     shape = [2, 5]
-    #     data = np.array([1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 10.0], dtype=np.float32)
-    #     f.write(struct.pack('i', ndim))
-    #     f.write(struct.pack(f'{ndim}i', *shape))
-    #     f.write(data.tobytes())
+    # 1. 模拟数据
+    # x: 模拟输入向量 (1, 768)
+    x = torch.randn(1, dim)
+    
+    # wq: 模拟权重矩阵 (768, 768)
+    # 假设这是从 .bin 文件里读出来的原始顺序
+    wq_raw = torch.randn(dim, dim)
+    
+    # ==========================================
+    # 模拟 llama2.c 的实现 (C语言逻辑)
+    # ==========================================
+    # llama2.c 把 x 当作列向量，遍历 W 的每一行与 x 做点积
+    # out[i] = sum(W[i][j] * x[j])
+    print("正在计算 llama2.c 风格的结果...")
+    llama_out = torch.zeros(1, dim)
+    
+    # 为了演示原理，这里用矩阵运算模拟 C 的行处理逻辑:
+    # (768, 768) @ (768, 1) -> (768, 1) -> reshape (1, 768)
+    llama_out = torch.matmul(wq_raw, x.T).reshape(1, dim)
+    
+    # ==========================================
+    # 你的实现: matmul(x, wq)
+    # ==========================================
+    print("正在计算你的原始结果 (x @ wq)...")
+    # 错误的方式：直接乘
+    my_out_wrong = torch.matmul(x, wq_raw)
+    
+    # 正确的方式：必须对 W 进行转置！
+    # 这样 W 的“列”就变成了原来的“行”
+    print("正在计算修正后的结果 (x @ wq.T)...")
+    my_out_correct = torch.matmul(x, wq_raw.T)
+    
+    # ==========================================
+    # 验证
+    # ==========================================
+    diff_wrong = (llama_out - my_out_wrong).abs().max().item()
+    diff_correct = (llama_out - my_out_correct).abs().max().item()
+    
+    print("-" * 40)
+    print(f"原始 WQ 直接相乘误差: {diff_wrong:.6f} (结果完全不同)")
+    print(f"转置 WQ 后相乘误差:   {diff_correct:.6f} (结果一致)")
+    print("-" * 40)
+    
+    if diff_correct < 1e-5:
+        print("✅ 解决方案验证成功：")
+        print("   在你的代码中，请使用: result = matmul(x, wq.T)")
+        print("   或者在加载权重时，直接把 wq 转置保存。")
 
-    # 读取文件
-    tensor = load_tensor(file_path)
-
-    # if tensor is not None:
-    #     print("\n前 10 个数据预览:")
-    #     # flatten() 展平以便打印，就像你在问题里贴的那样
-    #     print(tensor.flatten()[:10]) 
-    print(tensor.shape)
+if __name__ == "__main__":
+    solve_llama_shape_mismatch()

@@ -104,6 +104,15 @@ MemRefDescriptor<2> cherry_read_weight_2d_32000_768_f32(char* p_alloc, char* p_a
     return create_memref<2>(data, {dim0, dim1});
 }
 
+MemRefDescriptor<2> cherry_read_weight_2d_768_32000_f32(char* p_alloc, char* p_align, int64_t p_off,
+                                                        int64_t p_size, int64_t p_stride,
+                                                        int64_t dim0, int64_t dim1)
+{
+    printf("Loading 2D weight: %s [%ld, %ld]\n", p_align, dim0, dim1);
+    float* data = load_binary_file(p_align, dim0 * dim1);
+    return create_memref<2>(data, {dim0, dim1});
+}
+
 MemRefDescriptor<3> cherry_read_weight_3d_12_768_768_f32(char* p_alloc, char* p_align,
                                                          int64_t p_off, int64_t p_size,
                                                          int64_t p_stride, int64_t dim0,
