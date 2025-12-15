@@ -387,13 +387,13 @@ def Cherry_ReshapeOp : Cherry_Op<"reshape", [Pure, DeclareOpInterfaceMethods<Sha
   let description = [{
     Changes the shape of a tensor without reordering elements. Total number of elements must remain the same.
     Example:
-      %reshaped = cherry.reshape %input, %d0, %d1 : (!cherry.tensor<6xf32>, i64, i64) -> !cherry.tensor<2x3xf32>
+      %reshaped = cherry.reshape %input shape [%d0, %d1] : (!cherry.tensor<6xf32>, i64, i64) -> !cherry.tensor<2x3xf32>
   }];
 
-  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$new_shape);
+  let arguments = (ins AnyCherryTensor:$input, I64ArrayAttr:$new_shape);
   let results = (outs AnyCherryTensor:$result);
 
-  let assemblyFormat = "$input `,` $new_shape attr-dict `:` `(` type($input) `,` type($new_shape) `)` `->` type($result)";
+  let assemblyFormat = "$input  `shape` $new_shape attr-dict `:` `(` type($input) `)` `->` type($result)";
 }
 
 def Cherry_TransposeOp : Cherry_Op<"transpose", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {

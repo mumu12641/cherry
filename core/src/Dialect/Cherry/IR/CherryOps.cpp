@@ -383,21 +383,12 @@ void ReshapeOp::inferShapes()
     for (auto sh : inputType.getShape()) {
         shapes *= sh;
     }
-    for (auto newShape : getNewShape()) {
-        if (auto constantOp = newShape.getDefiningOp<ConstantOp>()) {
-            mlir::Attribute attr = constantOp.getValue();
-            if (auto intAttr = llvm::dyn_cast<mlir::IntegerAttr>(attr)) {
-                int64_t shape = intAttr.getInt();
-                newShapes *= shape;
-                newShapeDims.push_back(shape);
-            }
-            else {
-                newShapeDims.push_back(mlir::ShapedType::kDynamic);
-            }
-        }
-        else {
-            newShapeDims.push_back(mlir::ShapedType::kDynamic);
-        }
+    auto newShapeAttrs = getNewShapeAttr();
+    for (auto newShapeAttr : newShapeAttrs) {
+        auto    newShape = cast<IntegerAttr>(newShapeAttr);
+        int64_t shape    = newShape.getInt();
+        newShapes *= shape;
+        newShapeDims.push_back(shape);
     }
     assert(shapes == newShapes);
     auto resultType = CherryTensorType::get(getContext(), newShapeDims, elementType);

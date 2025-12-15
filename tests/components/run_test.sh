@@ -13,8 +13,6 @@ CLANG_BIN="${BUILD_DIR}/third_party/llvm-project/llvm/bin/clang++"
 LLVM_LIB_DIR="${BUILD_DIR}/third_party/llvm-project/llvm/lib"
 RUNTIME_LIB_DIR="${BUILD_DIR}/runtime"
 
-# 默认驱动文件 (main.cpp)
-DEFAULT_DRIVER="${PROJECT_ROOT}/tests/llama/main.cpp"
 # ===========================================
 
 # 错误处理：任何命令失败则立即退出
@@ -28,7 +26,6 @@ if [ "$#" -lt 1 ]; then
 fi
 
 TEST_NAME=$1
-DRIVER_SRC=${2:-$DEFAULT_DRIVER} # 如果没有提供第二个参数，使用默认驱动
 
 # 构建文件路径
 INPUT_MLIR="${PROJECT_ROOT}/tests/components/${TEST_NAME}.mlir"
@@ -44,7 +41,6 @@ fi
 echo "=========================================="
 echo "🧪 Test: $TEST_NAME"
 echo "📄 Input: $INPUT_MLIR"
-echo "🚗 Driver: $DRIVER_SRC"
 echo "=========================================="
 
 # 3. 运行 Cherry (MLIR -> LLVM IR)
@@ -59,7 +55,7 @@ fi
 
 # 4. 运行 Clang++ (Link -> Executable)
 echo -e "\n🔧 [2/3] Compiling with Clang++..."
-$CLANG_BIN "$DRIVER_SRC" "$OUTPUT_LL" \
+$CLANG_BIN "$OUTPUT_LL" \
     -o "$OUTPUT_BIN" \
     -O3 \
     -L"$LLVM_LIB_DIR" \
