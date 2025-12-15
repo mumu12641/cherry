@@ -274,6 +274,9 @@ module {
   }
 
   cherry.func @host(){
+    %vocab_size = cherry.constant (32000 : i64) : i64
+    cherry.runtime_call "build_tokenizer" (%vocab_size) {str_args = ["/home/nx/ycy/pb/cherry/tests/llama/tokenizer.bin"]} : (i64) -> ()
+  
     // Embedding
     %embedding = cherry.weight "/home/nx/ycy/pb/cherry/utils/stories110M/token_embeddings.bin" shape[32000, 768] type f32 -> !cherry.cherry_tensor<[32000x768xf32]>
 
@@ -300,7 +303,9 @@ module {
     
     %start_token = cherry.constant (1 : i64) : i64
     %start_pos = cherry.constant (0 : i64) : i64
-    %max_len = cherry.constant (180 : i64) : i64   
+    %max_len = cherry.constant (30 : i64) : i64   
+    
+    cherry.runtime_call "start" () : () -> ()
     
     %final_token, %final_pos, %final_k_cache, %final_v_cache = scf.while (%arg_token = %start_token, %arg_pos = %start_pos, %arg_k_cache = %k_cache_init, %arg_v_cache = %v_cache_init) 
           : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) -> (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>) {
@@ -326,11 +331,12 @@ module {
             
         %arg_max = cherry.argmax %logits dim 1 : (!cherry.cherry_tensor<[1x32000xf32]>) -> (!cherry.cherry_tensor<[1xi64]>)
         //cherry.print %logits : !cherry.cherry_tensor<[1x32000xf32]>
-        cherry.print %arg_max : !cherry.cherry_tensor<[1xi64]>
+        //cherry.print %arg_max : !cherry.cherry_tensor<[1xi64]>
         
         %zero = cherry.constant (0 : i64) : i64
         %next_token = cherry.tensor_get %arg_max [%zero] : (!cherry.cherry_tensor<[1xi64]>, i64) -> i64
-        
+        cherry.runtime_call "decode" (%curr_token, %next_token) : (i64, i64) -> ()
+
         %c1 = cherry.constant (1 : i64) : i64
         %next_pos = arith.addi %curr_pos, %c1 : i64
         
@@ -338,6 +344,9 @@ module {
       }
     //cherry.print %final_k_cache : !cherry.cherry_tensor<[12x1024x768xf32]>
     //cherry.print %final_v_cache : !cherry.cherry_tensor<[12x1024x768xf32]>
+    
+    cherry.runtime_call "end" (%max_len) : (i64) -> ()
+    cherry.runtime_call "free_tokenizer" () : () -> ()
     cherry.return 
   }
 }

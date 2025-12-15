@@ -15,3 +15,4 @@ tests/simplang
 tests/llama/*_output.ll
 tests/llama/*_output.mlir
 tests/llama/*.out
+tests/llama/*.log

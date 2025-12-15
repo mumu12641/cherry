@@ -35,6 +35,7 @@
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <cstdint>
 #include <fstream>
 #include <vector>
 
@@ -1078,7 +1079,6 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
         Value rhsSlice = rewriter.create<tensor::ExtractSliceOp>(
             loc, rhsSliceType, rhs, rhsOffsets, rhsSizes, rhsStrides);
 
-
         SmallVector<int64_t> matmulShape;
         for (int i = 0; i < resultType.getRank() - 1; i++) {
             matmulShape.push_back(resultType.getDimSize(i));
@@ -1592,6 +1592,62 @@ struct CallOpLowering : public OpConversionPattern<CallOp>
 };
 
 // ===----------------------------------------------------------------------===//
+// mlir::cherry::RuntimeCallOp Lowering
+// ===----------------------------------------------------------------------===//
+struct RuntimeCallOpLowering : public OpConversionPattern<RuntimeCallOp>
+{
+    using OpConversionPattern<RuntimeCallOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(RuntimeCallOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override
+    {
+        auto      loc      = op.getLoc();
+        StringRef funcName = op.getCallee();
+        ModuleOp  module   = op->getParentOfType<ModuleOp>();
+        SmallVector<Value> args;
+        
+        SmallVector<Type> inputTypes;
+        for (auto operand : adaptor.getInputs()) {
+            inputTypes.push_back(operand.getType());
+            args.push_back(operand);
+        }
+        if (auto strAttrs = op.getStrArgsAttr()) {
+            for (auto strAttr : strAttrs) {
+                StringRef           strVal = cast<StringAttr>(strAttr).getValue();
+                std::vector<int8_t> data(strVal.begin(), strVal.end());
+                data.push_back(0);
+    
+                auto staticStringType =
+                    RankedTensorType::get({(int64_t)data.size()}, rewriter.getIntegerType(8));
+                auto staticAttr = DenseElementsAttr::get(staticStringType, llvm::ArrayRef(data));
+                Value staticConst = rewriter.create<arith::ConstantOp>(loc, staticAttr);
+    
+                auto dynamicStringType =
+                    RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIntegerType(8));
+                Value strTensor = rewriter.create<tensor::CastOp>(loc, dynamicStringType, staticConst);
+    
+                inputTypes.push_back(dynamicStringType);
+                args.push_back(strTensor);
+            }
+        }
+
+        if (!module.lookupSymbol(funcName)) {
+            OpBuilder::InsertionGuard guard(rewriter);
+            rewriter.setInsertionPointToStart(module.getBody());
+
+            auto funcType = rewriter.getFunctionType(inputTypes, std::nullopt);
+
+            auto funcOp = rewriter.create<func::FuncOp>(loc, funcName, funcType);
+            funcOp.setPrivate();
+        }
+        
+        rewriter.replaceOpWithNewOp<func::CallOp>(op, funcName, TypeRange{}, args);
+
+        return success();
+    }
+};
+
+// ===----------------------------------------------------------------------===//
 // mlir::cherry::ReturnOp Lowering
 // ===----------------------------------------------------------------------===//
 struct ReturnOpLowering : public OpConversionPattern<ReturnOp>
@@ -1764,6 +1820,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
     target.addIllegalOp<cherry::RMSNormOp>();
     target.addIllegalOp<cherry::CastOp>();
     target.addIllegalOp<cherry::CallOp>();
+    target.addIllegalOp<cherry::RuntimeCallOp>();
     target.addIllegalOp<cherry::PrintOp>();
     RewritePatternSet patterns(&getContext());
 
@@ -1811,6 +1868,7 @@ void ConvertCherryToLinalgPass::runOnOperation()
 
                  CastOpLowering,
                  CallOpLowering,
+                 RuntimeCallOpLowering,
                  ReturnOpLowering,
                  FuncOpLowering,
                  PrintOpLowering>(converter, &getContext());

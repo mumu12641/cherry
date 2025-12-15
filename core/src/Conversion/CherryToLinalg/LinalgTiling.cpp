@@ -34,7 +34,6 @@ struct CherryLinalgTilingPass
 
 void CherryLinalgTilingPass::runOnOperation()
 {
-    llvm::outs() << "Running LinalgTiling Pass \n";
 
     mlir::func::FuncOp funcOp = getOperation();
     mlir::IRRewriter   rewriter(&getContext());
@@ -44,10 +43,10 @@ void CherryLinalgTilingPass::runOnOperation()
     llvm::SmallVector<mlir::linalg::LinalgOp> worklist;
     funcOp.walk([&](mlir::linalg::LinalgOp op) { worklist.push_back(op); });
 
-    llvm::outs() << "[Hierarchical Tiling] Outer: " << outerTileSize.getValue() << "×"
-                 << outerTileSize.getValue() << "×" << outerTileSize.getValue()
-                 << ", Inner: " << tileSize.getValue() << "×" << tileSize.getValue() << "×"
-                 << tileSize.getValue() << "\n";
+    // llvm::outs() << "[Hierarchical Tiling] Outer: " << outerTileSize.getValue() << "×"
+    //              << outerTileSize.getValue() << "×" << outerTileSize.getValue()
+    //              << ", Inner: " << tileSize.getValue() << "×" << tileSize.getValue() << "×"
+    //              << tileSize.getValue() << "\n";
     llvm::SmallVector<int64_t, 3> innerTileSizes(3, tileSize.getValue());
     llvm::SmallVector<int64_t, 3> outerTileSizes(3, outerTileSize.getValue());
 

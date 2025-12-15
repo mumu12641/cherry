@@ -1,1 +1,1 @@
-add_library(cherry_runtime STATIC runtime.cpp)
+add_library(cherry_runtime STATIC weight.cpp tokenizer.cpp clock.cpp main.cpp)

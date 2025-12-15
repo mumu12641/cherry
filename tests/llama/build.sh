@@ -16,7 +16,6 @@ RUNTIME_LIB="/home/nx/ycy/pb/cherry/build/runtime"
 
 INPUT_MLIR="/home/nx/ycy/pb/cherry/tests/llama/cherry.mlir"
 OUTPUT_LL="cherry_output.ll"
-DRIVER_CPP="main.cpp"
 OUTPUT_EXE="llama.out"
 
 # ================= 脚本逻辑 =================
@@ -48,7 +47,7 @@ echo -e "${GREEN}   -> Generated $OUTPUT_LL${NC}"
 # 3. 运行 Clang++ 编译链接
 echo -e "${YELLOW}[2/3] 🔧 Compiling and Linking with Clang++...${NC}"
 
-$CLANG_BIN "$DRIVER_CPP" "$OUTPUT_LL" \
+$CLANG_BIN "$OUTPUT_LL" \
     -o "$OUTPUT_EXE" \
     -O3 \
     -L"$LLVM_LIB" \

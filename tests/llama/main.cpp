@@ -6,7 +6,7 @@ int             main()
     std::cout << "Running kernel..." << std::endl;
 
     // 1. 获取开始时间点
-    auto start = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point start = std::chrono::high_resolution_clock::now();
 
     // 2. 运行 host 函数
     host();

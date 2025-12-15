@@ -565,6 +565,25 @@ def CallOp : Cherry_Op<"call",[DeclareOpInterfaceMethods<CallOpInterface>]>
   ];
 }
 
+def Cherry_RuntimeCallOp : Cherry_Op<"runtime_call", []> {
+  let summary = "Call an external runtime C++ function";
+  let description = [{
+    Generic op to call external void functions.
+    Example:
+      cherry.runtime_call "name"(%arg1) { str_args = ["some_string"] } : (i32) -> ()
+    
+  }];
+
+  let arguments = (ins StrAttr:$callee, Variadic<AnyType>:$inputs, OptionalAttr<StrArrayAttr>:$str_args);
+  
+  let results = (outs);
+
+  let assemblyFormat = [{
+    $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
+  }];
+}
+
+
 def ReturnOp : Cherry_Op<"return", [Pure, HasParent<"FuncOp">,
                                  Terminator]> {
   let summary = "return operation";
