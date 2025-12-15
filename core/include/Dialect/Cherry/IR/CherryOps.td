@@ -434,23 +434,27 @@ def Cherry_GenerateMaskOp : Cherry_Op<"generate_mask", [Pure, DeclareOpInterface
 // Masked MatMul Op
 // =============================================================================
 def Cherry_MaskedMatMulOp : Cherry_Op<"masked_matmul", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
-  let summary = "Matrix multiplication with additive mask";
+  let summary = "Matrix multiplication with dynamic valid length masking";
   let description = [{
-    Computes: result = (lhs * rhs) + mask
-
-    This leverages the accumulation semantics of linalg.matmul.
-    Useful for Attention:
-      lhs: Q [1, 64]
-      rhs: K_T [64, 1024]
-      mask: [1, 1024] (1.0 for valid, 0.0 for invalid)
-      result: Scores [1, 1024]
+    Computes: result = lhs * rhs_sliced
+    Where rhs is virtually sliced by valid_len.
+    
+    Inputs:
+      lhs: Q [1, D]
+      rhs: K_T [D, MaxSeqLen]
+      valid_len: Scalar (i64) - The number of valid tokens in the sequence.
+    
+    Output:
+      result: Scores [1, MaxSeqLen]
+      Values beyond valid_len are set to -Inf.
   }];
 
-  let arguments = (ins AnyCherryTensor:$lhs, AnyCherryTensor:$rhs, AnyCherryTensor:$mask);
+  let arguments = (ins AnyCherryTensor:$lhs, AnyCherryTensor:$rhs, I64:$valid_len);
   let results = (outs AnyCherryTensor:$result);
 
-  let assemblyFormat = "$lhs `,` $rhs `,` $mask attr-dict `:` functional-type(operands, results)";
+  let assemblyFormat = "$lhs `,` $rhs `,` $valid_len attr-dict `:` functional-type(operands, results)";
 }
+
 
 
 // 1. MatMul: 支持 Batch 的矩阵乘法

@@ -7,7 +7,7 @@ module {
       %pos: i64,
       %k_cache: !cherry.cherry_tensor<[12x1024x768xf32]>, // [n_layers, max_seq, dim]
       %v_cache: !cherry.cherry_tensor<[12x1024x768xf32]>, // [n_layers, max_seq, dim]
-      %mask: !cherry.cherry_tensor<[1x1024xf32]>, // [1, max_seq]
+      // %mask: !cherry.cherry_tensor<[1x1024xf32]>, // [1, max_seq]
       
       // Embeddings
       %embedding_table: !cherry.cherry_tensor<[32000x768xf32]>,
@@ -50,6 +50,7 @@ module {
     %scale_val = cherry.constant (0.125 : f32) : f32 // 1 / sqrt(64)
     %max_len = cherry.constant (1024 : i64) : i64
     %vocab_size = cherry.constant (32000 : i64) : i64
+    %valid_len = cherry.scalar_add %pos, %constant_1 : (i64, i64) -> i64
 
     // 2. Transformer Layers Loop (0 to 11)
     // iter_args: current hidden state (%curr_x), current kv_cache (%curr_cache)
@@ -162,8 +163,11 @@ module {
             // Q: [1, 64]
             // K_T: [64, 1024]
             // Mask: [1, 1024]
-            %score = cherry.masked_matmul %q_head, %k_head_T, %mask
-                : (!cherry.cherry_tensor<[1x64xf32]>, !cherry.cherry_tensor<[64x1024xf32]>, !cherry.cherry_tensor<[1x1024xf32]>) 
+            // %score = cherry.masked_matmul %q_head, %k_head_T, %mask
+            //    : (!cherry.cherry_tensor<[1x64xf32]>, !cherry.cherry_tensor<[64x1024xf32]>, !cherry.cherry_tensor<[1x1024xf32]>) 
+            //    -> !cherry.cherry_tensor<[1x1024xf32]>
+            %score = cherry.masked_matmul %q_head, %k_head_T, %valid_len
+                : (!cherry.cherry_tensor<[1x64xf32]>, !cherry.cherry_tensor<[64x1024xf32]>, i64) 
                 -> !cherry.cherry_tensor<[1x1024xf32]>
             
             %score_scaled = cherry.tensor_mul_scalar %score, %scale_val
@@ -305,15 +309,15 @@ module {
       } do {
         ^bb0(%curr_token: i64, %curr_pos: i64, %curr_k_cache: !cherry.cherry_tensor<[12x1024x768xf32]>, %curr_v_cache: !cherry.cherry_tensor<[12x1024x768xf32]>):
         
-        %mask = cherry.generate_mask %curr_pos, [1, 1024] : !cherry.cherry_tensor<[1x1024xf32]>
+        // %mask = cherry.generate_mask %curr_pos, [1, 1024] : !cherry.cherry_tensor<[1x1024xf32]>
 
         %logits, %next_k_cache, %next_v_cache = cherry.call @llama_forward(
-            %curr_token, %curr_pos, %curr_k_cache, %curr_v_cache, %mask,
+            %curr_token, %curr_pos, %curr_k_cache, %curr_v_cache,
             %embedding,
             %rms_att, %wq, %wk, %wv, %wo,
             %rms_ffn, %w1, %w2, %w3,
             %rms_final, %wcls
-        ) : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>,!cherry.cherry_tensor<[1x1024xf32]>,
+        ) : (i64, i64, !cherry.cherry_tensor<[12x1024x768xf32]>, !cherry.cherry_tensor<[12x1024x768xf32]>,
              !cherry.cherry_tensor<[32000x768xf32]>,
              !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>, !cherry.cherry_tensor<[12x768x768xf32]>,
              !cherry.cherry_tensor<[12x768xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>, !cherry.cherry_tensor<[12x768x2048xf32]>, !cherry.cherry_tensor<[12x2048x768xf32]>,

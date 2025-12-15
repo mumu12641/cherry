@@ -32,6 +32,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -93,7 +94,6 @@ bool runPipelineAndPrint(const std::string& phaseName, mlir::ModuleOp module,
 
 int main(int argc, char** argv)
 {
-    // [新增] 解析命令行参数
     cl::ParseCommandLineOptions(argc, argv, "Cherry Compiler Driver\n");
 
     mlir::DialectRegistry registry;
@@ -115,6 +115,7 @@ int main(int argc, char** argv)
     mlir::scf::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::scf::registerValueBoundsOpInterfaceExternalModels(registry);
     mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
+    mlir::tensor::registerValueBoundsOpInterfaceExternalModels(registry);
     mlir::affine::registerValueBoundsOpInterfaceExternalModels(registry);
     // mlir::vector::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(registry);

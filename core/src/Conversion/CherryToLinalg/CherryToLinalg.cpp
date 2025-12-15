@@ -983,17 +983,24 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
     LogicalResult matchAndRewrite(MaskedMatMulOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        auto  loc  = op.getLoc();
-        Value lhs  = adaptor.getLhs();
-        Value rhs  = adaptor.getRhs();
-        Value mask = adaptor.getMask();
+        auto  loc         = op.getLoc();
+        Value lhs         = adaptor.getLhs();
+        Value rhs         = adaptor.getRhs();
+        Value validLenI64 = adaptor.getValidLen();
+        Value validLen =
+            rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), validLenI64);
 
-        auto lhsType  = cast<RankedTensorType>(lhs.getType());
-        auto rhsType  = cast<RankedTensorType>(rhs.getType());
-        auto maskType = cast<RankedTensorType>(mask.getType());
+
+        auto lhsType = cast<RankedTensorType>(lhs.getType());
+        auto rhsType = cast<RankedTensorType>(rhs.getType());
         auto resultType =
             cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
-        auto elemType = resultType.getElementType();
+        auto  elemType = resultType.getElementType();
+        Value negInfVal =
+            rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, -1.0e9));
+        Value zeroVal =
+            rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
+
 
         int64_t lhsRank = lhsType.getRank();
         int64_t rhsRank = rhsType.getRank();
@@ -1010,7 +1017,6 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
 
         SmallVector<AffineExpr> lhsExprs;
         SmallVector<AffineExpr> rhsExprs;
-        SmallVector<AffineExpr> maskExprs;   // Mask Map
         SmallVector<AffineExpr> outExprs;
 
         int64_t lhsBatchOffset = outBatchRank - lhsBatchRank;
@@ -1030,57 +1036,106 @@ struct MaskedMatMulOpLowering : public OpConversionPattern<MaskedMatMulOp>
         for (int i = 0; i < outBatchRank; ++i) {
             auto expr = rewriter.getAffineDimExpr(i);
             outExprs.push_back(expr);
-            maskExprs.push_back(expr);
         }
         outExprs.push_back(rewriter.getAffineDimExpr(idxM));
         outExprs.push_back(rewriter.getAffineDimExpr(idxN));
 
-        maskExprs.push_back(rewriter.getAffineDimExpr(idxM));
-        maskExprs.push_back(rewriter.getAffineDimExpr(idxN));
-
-        SmallVector<AffineMap, 4> indexingMaps = {
+        SmallVector<AffineMap, 3> indexingMaps = {
             AffineMap::get(totalLoopRank, 0, lhsExprs, rewriter.getContext()),
             AffineMap::get(totalLoopRank, 0, rhsExprs, rewriter.getContext()),
-            AffineMap::get(totalLoopRank, 0, maskExprs, rewriter.getContext()),   // Add Mask Map
             AffineMap::get(totalLoopRank, 0, outExprs, rewriter.getContext())};
 
         SmallVector<utils::IteratorType> iteratorTypes(totalLoopRank,
                                                        utils::IteratorType::parallel);
         iteratorTypes[idxK] = utils::IteratorType::reduction;
 
-        // init Output Tensor with 0.0
-        Value initTensor = rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elemType);
+        // dynamic RHS slice by valid len
+        // Batch * [K, validLen]
+        SmallVector<OpFoldResult> rhsOffsets, rhsSizes, rhsStrides;
 
-        Value zero = rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elemType, 0.0));
+        // 0 ~ rank - 2
+        for (int i = 0; i < rhsRank - 2; ++i) {
+            rhsOffsets.push_back(rewriter.getIndexAttr(0));
+            rhsSizes.push_back(rewriter.getIndexAttr(rhsType.getDimSize(i)));
+            rhsStrides.push_back(rewriter.getIndexAttr(1));
+        }
+        // K
+        int kDimIdx = rhsRank - 2;
+        rhsOffsets.push_back(rewriter.getIndexAttr(0));
+        rhsSizes.push_back(rewriter.getIndexAttr(rhsType.getDimSize(kDimIdx)));
+        rhsStrides.push_back(rewriter.getIndexAttr(1));
 
-        Value zeroInit = rewriter.create<linalg::FillOp>(loc, zero, initTensor).getResult(0);
+        // N
+        rhsOffsets.push_back(rewriter.getIndexAttr(0));
+        rhsSizes.push_back(validLen);
+        rhsStrides.push_back(rewriter.getIndexAttr(1));
 
-        rewriter.replaceOpWithNewOp<linalg::GenericOp>(
-            op,
-            TypeRange{resultType},
-            ValueRange{lhs, rhs, mask},   // Inputs: LHS, RHS, Mask
-            ValueRange{zeroInit},         // Outputs
-            indexingMaps,
-            iteratorTypes,
+        SmallVector<int64_t> rhsSliceShape;
+        for (int i = 0; i < rhsRank - 1; ++i) rhsSliceShape.push_back(rhsType.getDimSize(i));
+        rhsSliceShape.push_back(ShapedType::kDynamic);   // N is dynamic
+        auto rhsSliceType = RankedTensorType::get(rhsSliceShape, elemType);
+
+        Value rhsSlice = rewriter.create<tensor::ExtractSliceOp>(
+            loc, rhsSliceType, rhs, rhsOffsets, rhsSizes, rhsStrides);
+
+
+        SmallVector<int64_t> matmulShape;
+        for (int i = 0; i < resultType.getRank() - 1; i++) {
+            matmulShape.push_back(resultType.getDimSize(i));
+        }
+        matmulShape.push_back(ShapedType::kDynamic);
+
+        Value resSliceInit =
+            rewriter.create<tensor::EmptyOp>(loc, matmulShape, elemType, ValueRange{validLen});
+        Value resSliceZero =
+            rewriter.create<linalg::FillOp>(loc, zeroVal, resSliceInit).getResult(0);
+
+        auto matmulOp = rewriter.create<linalg::GenericOp>(
+            loc,
+            TypeRange{resSliceZero.getType()},   // Result types
+            ValueRange{lhs, rhsSlice},           // Inputs
+            ValueRange{resSliceZero},            // Outputs
+            indexingMaps,                        // Maps (Batch compatible)
+            iteratorTypes,                       // Iterators
             [&](OpBuilder& b, Location loc, ValueRange args) {
                 Value l   = args[0];
                 Value r   = args[1];
-                Value m   = args[2];   // Mask Value
-                Value acc = args[3];
-
+                Value acc = args[2];
                 Value mul = b.create<arith::MulFOp>(loc, l, r);
-                Value sum = b.create<arith::AddFOp>(loc, acc, mul);
+                Value add = b.create<arith::AddFOp>(loc, acc, mul);
 
-                Value negInf = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, -1.0e9));
-
-                Value threshold = b.create<arith::ConstantOp>(loc, b.getFloatAttr(elemType, 0.5));
-                Value isValid =
-                    b.create<arith::CmpFOp>(loc, arith::CmpFPredicate::UGT, m, threshold);
-
-                Value res = b.create<arith::SelectOp>(loc, isValid, sum, negInf);
-
-                b.create<linalg::YieldOp>(loc, res);
+                b.create<linalg::YieldOp>(loc, add);
             });
+        Value matmulResult = matmulOp.getResult(0);
+
+        // output: 1 * 1024
+        Value outputInitTensor =
+            rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elemType);
+        Value outputFilledNegInf =
+            rewriter.create<linalg::FillOp>(loc, negInfVal, outputInitTensor).getResult(0);
+        SmallVector<OpFoldResult> insOffsets, insSizes, insStrides;
+
+        int64_t resultRank = resultType.getRank();
+        for (int i = 0; i < resultRank - 1; ++i) {
+            insOffsets.push_back(rewriter.getIndexAttr(0));
+            insSizes.push_back(rewriter.getIndexAttr(resultType.getDimSize(i)));
+            insStrides.push_back(rewriter.getIndexAttr(1));
+        }
+
+        // N dim: Offset=0, Size=validLen, Stride=1
+        insOffsets.push_back(rewriter.getIndexAttr(0));
+        insSizes.push_back(validLen);
+        insStrides.push_back(rewriter.getIndexAttr(1));
+
+        Value finalResult =
+            rewriter.create<tensor::InsertSliceOp>(loc,
+                                                   matmulResult,   // source (computed valid part)
+                                                   outputFilledNegInf,   // dest (background -Inf)
+                                                   insOffsets,
+                                                   insSizes,
+                                                   insStrides);
+
+        rewriter.replaceOp(op, finalResult);
 
         return success();
     }
