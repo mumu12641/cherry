@@ -9,7 +9,6 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Linalg/Utils/Utils.h"
-// #include "mlir/Dialect/SCF/SCF.h"
 #include "mlir/Pass/Pass.h"
 
 #include "llvm/Support/Debug.h"
@@ -43,10 +42,6 @@ void CherryLinalgTilingPass::runOnOperation()
     llvm::SmallVector<mlir::linalg::LinalgOp> worklist;
     funcOp.walk([&](mlir::linalg::LinalgOp op) { worklist.push_back(op); });
 
-    // llvm::outs() << "[Hierarchical Tiling] Outer: " << outerTileSize.getValue() << "×"
-    //              << outerTileSize.getValue() << "×" << outerTileSize.getValue()
-    //              << ", Inner: " << tileSize.getValue() << "×" << tileSize.getValue() << "×"
-    //              << tileSize.getValue() << "\n";
     llvm::SmallVector<int64_t, 3> innerTileSizes(3, tileSize.getValue());
     llvm::SmallVector<int64_t, 3> outerTileSizes(3, outerTileSize.getValue());
 

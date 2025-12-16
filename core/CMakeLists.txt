@@ -11,4 +11,5 @@ target_link_libraries(cherry
         LLVMCore
         mlir_c_runner_utils
         mlir_runner_utils
+        cherry-opt
 )
