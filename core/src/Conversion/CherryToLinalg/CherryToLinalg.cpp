@@ -1767,7 +1767,6 @@ struct ConvertCherryToLinalgPass
 void ConvertCherryToLinalgPass::runOnOperation()
 {
     // Implementation of the pass
-    llvm::outs() << "Running Cherry to Linalg conversion pass\n";
     ModuleOp            module = getOperation();
     CherryTypeConverter converter;
 

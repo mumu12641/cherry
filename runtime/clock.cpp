@@ -28,7 +28,7 @@ void end(int num)
         tokens_per_second = num / seconds;
     }
 
-    std::cout << "\n[Performance Metrics]" << std::endl;
+    std::cout << "\n\n[Performance Metrics]" << std::endl;
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Tokens processed : " << num << std::endl;
     std::cout << "Execution time   : " << duration_ms.count() << " ms (" << duration_us.count()

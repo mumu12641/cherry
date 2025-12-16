@@ -13,13 +13,9 @@
 namespace mlir::cherry {
 void CherryDialect::initialize()
 {
-    llvm::outs() << "initializing " << getDialectNamespace() << "\n";
     registerType();
     registerOps();
 }
 
-CherryDialect::~CherryDialect()
-{
-    llvm::outs() << "destroying " << getDialectNamespace() << "\n";
-}
+CherryDialect::~CherryDialect() {}
 }   // namespace mlir::cherry

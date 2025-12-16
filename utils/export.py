@@ -17,7 +17,7 @@ def create_directory_if_not_exists(dir_path):
         try:
             os.makedirs(dir_path, mode=0o755)
             print(f"📂 Creating output directory: {dir_path}")
-        except OSError as e:
+        except OSError as _:
             print(f"❌ Failed to create directory: {dir_path}")
             sys.exit(1)
     else:

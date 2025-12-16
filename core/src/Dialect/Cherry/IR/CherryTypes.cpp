@@ -19,7 +19,6 @@
 namespace mlir::cherry {
 void CherryDialect::registerType()
 {
-    llvm::outs() << "register " << getDialectNamespace() << "  Type\n";
     addTypes<
 #define GET_TYPEDEF_LIST
 #include "Dialect/Cherry/IR/CherryTypes.cpp.inc"

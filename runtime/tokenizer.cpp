@@ -36,7 +36,7 @@ Tokenizer tokenizer;
 
 void build_tokenizer(int vocab_size, char* alloc, char* tokenizer_path)
 {
-    printf("Building tokenizer from %s\n", tokenizer_path);
+
     // i should have written the vocab_size into the tokenizer file... sigh
     tokenizer.vocab_size = vocab_size;
     // malloc space to hold the scores and the strings

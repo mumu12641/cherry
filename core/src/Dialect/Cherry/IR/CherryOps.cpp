@@ -58,7 +58,6 @@ struct CherryInlinerInterface : public DialectInlinerInterface
 
 void CherryDialect::registerOps()
 {
-    llvm::outs() << "register " << getDialectNamespace() << "  Ops\n";
     addOperations<
 #define GET_OP_LIST
 #include "Dialect/Cherry/IR/CherryOps.cpp.inc"
