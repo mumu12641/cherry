@@ -1,6 +1,7 @@
 add_mlir_conversion_library(CherryToLinalg
   CherryToLinalg.cpp
   LinalgTiling.cpp
+  LinalgVectorization.cpp
 
   DEPENDS
   CherryConversionPassesIncGen

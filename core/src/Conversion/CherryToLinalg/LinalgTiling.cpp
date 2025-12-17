@@ -42,16 +42,44 @@ void CherryLinalgTilingPass::runOnOperation()
     llvm::SmallVector<mlir::linalg::LinalgOp> worklist;
     funcOp.walk([&](mlir::linalg::LinalgOp op) { worklist.push_back(op); });
 
-    llvm::SmallVector<int64_t, 3> innerTileSizes(3, tileSize.getValue());
-    llvm::SmallVector<int64_t, 3> outerTileSizes(3, outerTileSize.getValue());
+    auto tileOps = [&](ArrayRef<int64_t> tileSizes, LinalgTilingLoopType lt) -> LogicalResult {
+        LinalgTilingOptions tilingOptions;
+        tilingOptions.setTileSizes(tileSizes).setLoopType(lt);
 
-    mlir::linalg::LinalgTilingOptions options;
-    options.setTileSizes(innerTileSizes);
-    options.setLoopType(loopType);
-    for (mlir::linalg::LinalgOp op : worklist) {
-        rewriter.setInsertionPoint(op);
-        mlir::FailureOr<mlir::linalg::TiledLinalgOp> tiledResult =
-            mlir::linalg::tileLinalgOp(rewriter, op, options);
-        rewriter.replaceOp(op, tiledResult->tensorResults);
+        for (LinalgOp op : worklist) {
+            if (op->getParentOp() == nullptr) continue;
+
+            rewriter.setInsertionPoint(op);
+            FailureOr<mlir::linalg::TiledLinalgOp> tiledOp =
+                mlir::linalg::tileLinalgOp(rewriter, op, tilingOptions);
+            if (succeeded(tiledOp)) {
+                rewriter.replaceOp(op, tiledOp->tensorResults);
+            }
+        }
+        return success();
+    };
+    if (hierarchical.getValue()) {
+
+        SmallVector<int64_t, 3> outerTileSizes(3, outerTileSize.getValue());
+        if (failed(tileOps(outerTileSizes, loopType))) {
+            signalPassFailure();
+            return;
+        }
+
+        worklist.clear();
+        funcOp.walk([&](LinalgOp op) { worklist.push_back(op); });
+
+        SmallVector<int64_t, 3> innerTileSizes(3, tileSize.getValue());
+        if (failed(tileOps(innerTileSizes, LinalgTilingLoopType::Loops))) {
+            signalPassFailure();
+            return;
+        }
+    }
+    else {
+        SmallVector<int64_t, 3> tileSizes(3, tileSize.getValue());
+        if (failed(tileOps(tileSizes, loopType))) {
+            signalPassFailure();
+            return;
+        }
     }
 }

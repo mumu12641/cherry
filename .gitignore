@@ -12,6 +12,7 @@ utils/stories110M/
 tests/components/*_output.ll
 tests/components/*_output.mlir
 tests/components/*.out
+tests/components/*.log
 tests/simplang
 tests/llama/*_output.ll
 tests/llama/*_output.mlir

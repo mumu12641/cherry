@@ -2,6 +2,7 @@
 
 #include "Conversion/CherryToLinalg/CherryToLinalg.h"
 #include "Conversion/CherryToLinalg/LinalgTiling.h"
+#include "Conversion/CherryToLinalg/LinalgVectorization.h"
 #include "Dialect/Cherry/IR/CherryDialect.h"
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
@@ -36,6 +37,9 @@
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
+#include "mlir/Dialect/Vector/Transforms/Passes.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Pass/PassManager.h"
@@ -76,6 +80,14 @@ void addLinalgTilingPass(mlir::OpPassManager& pm)
     funcPm.addPass(mlir::cherry::createCherryLinalgTilingPass());
 }
 
+void addLinalgVectorizationPass(mlir::OpPassManager& pm)
+{
+    auto& funcPm = pm.nest<mlir::func::FuncOp>();
+    funcPm.addPass(mlir::cherry::createCherryLinalgVectorizationPass());
+    funcPm.addPass(mlir::createCanonicalizerPass());
+    funcPm.addPass(mlir::createCSEPass());
+}
+
 void addBufferizationPass(mlir::OpPassManager& pm)
 {
     pm.addPass(mlir::bufferization::createEmptyTensorToAllocTensorPass());
@@ -98,6 +110,9 @@ void addLLVMLoweringPass(mlir::OpPassManager& pm)
 {
     pm.addPass(mlir::memref::createExpandStridedMetadataPass());
     pm.addPass(mlir::createLowerAffinePass());
+    pm.addNestedPass<func::FuncOp>(createConvertVectorToSCFPass());
+    pm.addPass(mlir::createConvertVectorToLLVMPass());
+    
     pm.addPass(mlir::createConvertSCFToCFPass());
 
     pm.addPass(mlir::createConvertFuncToLLVMPass());
@@ -118,6 +133,7 @@ void buildCherryBasicPipeline(OpPassManager& pm, const CherryPipelineOptions& op
     addCanoicalizerPass(pm);
     addLinalgConversionPass(pm);
     addLinalgTilingPass(pm);
+    addLinalgVectorizationPass(pm);
     addBufferizationPass(pm);
     addLinalgToSCFPass(pm);
     addLLVMLoweringPass(pm);
@@ -139,6 +155,8 @@ void registerCherryBasicPipelinesExtension(mlir::DialectRegistry& registry)
     mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::tensor::registerValueBoundsOpInterfaceExternalModels(registry);
     mlir::affine::registerValueBoundsOpInterfaceExternalModels(registry);
+    mlir::vector::registerBufferizableOpInterfaceExternalModels(registry);
+    mlir::vector::registerSubsetOpInterfaceExternalModels(registry);
     mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::func::registerAllExtensions(registry);
 }

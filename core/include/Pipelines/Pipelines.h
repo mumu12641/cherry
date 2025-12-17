@@ -6,12 +6,11 @@
 namespace mlir::pipeline {
 struct CherryPipelineOptions : public PassPipelineOptions<CherryPipelineOptions>
 {
-
 };
 
 void buildCherryBasicPipeline(OpPassManager& pm, const CherryPipelineOptions& options);
 void registerCherryBasicPipelines();
-void registerCherryBasicPipelinesExtension(mlir::DialectRegistry &registry);
+void registerCherryBasicPipelinesExtension(mlir::DialectRegistry& registry);
 
 // Phase 1: Inlining
 void addInlinerPass(mlir::OpPassManager& pm);
@@ -36,5 +35,7 @@ void addLinalgToSCFPass(mlir::OpPassManager& pm);
 
 // Phase 8: Lowering to LLVM
 void addLLVMLoweringPass(mlir::OpPassManager& pm);
+
+void addLinalgVectorizationPass(mlir::OpPassManager& pm);
 }   // namespace mlir::pipeline
 #endif

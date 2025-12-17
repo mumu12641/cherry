@@ -31,5 +31,9 @@ add_mlir_library(CherryPipelines
   MLIRBuiltinToLLVMIRTranslation
   MLIRLLVMToLLVMIRTranslation
   MLIRIndexToLLVM
+  
+  MLIRVectorDialect               # Vector dialect
+  MLIRVectorTransforms            # Vector transforms
+  MLIRVectorToLLVM                # Vector to LLVM conversion patterns
 )
 

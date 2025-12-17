@@ -9,6 +9,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
@@ -46,6 +47,7 @@ int main(int argc, char** argv)
                     mlir::func::FuncDialect,
                     mlir::tensor::TensorDialect,
                     mlir::memref::MemRefDialect,
+                    mlir::vector::VectorDialect,
                     mlir::bufferization::BufferizationDialect,
                     mlir::affine::AffineDialect>();
 
