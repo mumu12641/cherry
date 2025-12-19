@@ -1169,6 +1169,31 @@ struct MatMulOpLowering : public OpConversionPattern<MatMulOp>
     LogicalResult matchAndRewrite(MatMulOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
+        // Location loc = op.getLoc();
+
+        // Value lhs = adaptor.getLhs();
+        // Value rhs = adaptor.getRhs();
+
+        // auto resultType =
+        //     cast<RankedTensorType>(this->typeConverter->convertType(op.getResult().getType()));
+        // Type elementType = resultType.getElementType();
+
+        // Value emptyTensor =
+        //     rewriter.create<tensor::EmptyOp>(loc, resultType.getShape(), elementType);
+
+        // Value zeroConst =
+        //     rewriter.create<arith::ConstantOp>(loc, rewriter.getFloatAttr(elementType, 0.0));
+
+        // Value filledTensor =
+        //     rewriter.create<linalg::FillOp>(loc, zeroConst, emptyTensor).getResult(0);
+
+        // auto matmulOp =
+        //     rewriter.create<linalg::MatmulOp>(loc, ValueRange{lhs, rhs}, ValueRange{filledTensor});
+
+        // rewriter.replaceOp(op, matmulOp.getResult(0));
+
+        // return success();
+
         auto  loc = op.getLoc();
         Value lhs = adaptor.getLhs();
         Value rhs = adaptor.getRhs();
@@ -1601,11 +1626,11 @@ struct RuntimeCallOpLowering : public OpConversionPattern<RuntimeCallOp>
     LogicalResult matchAndRewrite(RuntimeCallOp op, OpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override
     {
-        auto      loc      = op.getLoc();
-        StringRef funcName = op.getCallee();
-        ModuleOp  module   = op->getParentOfType<ModuleOp>();
+        auto               loc      = op.getLoc();
+        StringRef          funcName = op.getCallee();
+        ModuleOp           module   = op->getParentOfType<ModuleOp>();
         SmallVector<Value> args;
-        
+
         SmallVector<Type> inputTypes;
         for (auto operand : adaptor.getInputs()) {
             inputTypes.push_back(operand.getType());
@@ -1616,16 +1641,17 @@ struct RuntimeCallOpLowering : public OpConversionPattern<RuntimeCallOp>
                 StringRef           strVal = cast<StringAttr>(strAttr).getValue();
                 std::vector<int8_t> data(strVal.begin(), strVal.end());
                 data.push_back(0);
-    
+
                 auto staticStringType =
                     RankedTensorType::get({(int64_t)data.size()}, rewriter.getIntegerType(8));
-                auto staticAttr = DenseElementsAttr::get(staticStringType, llvm::ArrayRef(data));
+                auto  staticAttr  = DenseElementsAttr::get(staticStringType, llvm::ArrayRef(data));
                 Value staticConst = rewriter.create<arith::ConstantOp>(loc, staticAttr);
-    
+
                 auto dynamicStringType =
                     RankedTensorType::get({ShapedType::kDynamic}, rewriter.getIntegerType(8));
-                Value strTensor = rewriter.create<tensor::CastOp>(loc, dynamicStringType, staticConst);
-    
+                Value strTensor =
+                    rewriter.create<tensor::CastOp>(loc, dynamicStringType, staticConst);
+
                 inputTypes.push_back(dynamicStringType);
                 args.push_back(strTensor);
             }
@@ -1640,7 +1666,7 @@ struct RuntimeCallOpLowering : public OpConversionPattern<RuntimeCallOp>
             auto funcOp = rewriter.create<func::FuncOp>(loc, funcName, funcType);
             funcOp.setPrivate();
         }
-        
+
         rewriter.replaceOpWithNewOp<func::CallOp>(op, funcName, TypeRange{}, args);
 
         return success();

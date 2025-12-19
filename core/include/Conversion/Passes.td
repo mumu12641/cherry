@@ -24,7 +24,7 @@ def CherryLinalgTilingPass : Pass<"cherry-linalg-tiling", "mlir::func::FuncOp">{
                "Tile size for linalg operations">,
         Option<"outerTileSize", "outer-tile-size", "int64_t", /*default=*/"64", 
                "Outer tile size for linalg operations">,
-        Option<"hierarchical", "hierarchical", "bool", /*default=*/"true", 
+        Option<"hierarchical", "hierarchical", "bool", /*default=*/"false", 
                "Enable hierarchical tiling">,
         Option<"parallelLoops", "parallel-loops", "bool", /*default=*/"false", 
                "Enable parallel loops">

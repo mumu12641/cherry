@@ -110,8 +110,8 @@ void addLLVMLoweringPass(mlir::OpPassManager& pm)
 {
     pm.addPass(mlir::memref::createExpandStridedMetadataPass());
     pm.addPass(mlir::createLowerAffinePass());
-    pm.addNestedPass<func::FuncOp>(createConvertVectorToSCFPass());
-    pm.addPass(mlir::createConvertVectorToLLVMPass());
+    // pm.addNestedPass<func::FuncOp>(createConvertVectorToSCFPass());
+    // pm.addPass(mlir::createConvertVectorToLLVMPass());
     
     pm.addPass(mlir::createConvertSCFToCFPass());
 
@@ -133,7 +133,7 @@ void buildCherryBasicPipeline(OpPassManager& pm, const CherryPipelineOptions& op
     addCanoicalizerPass(pm);
     addLinalgConversionPass(pm);
     addLinalgTilingPass(pm);
-    addLinalgVectorizationPass(pm);
+    // addLinalgVectorizationPass(pm);
     addBufferizationPass(pm);
     addLinalgToSCFPass(pm);
     addLLVMLoweringPass(pm);

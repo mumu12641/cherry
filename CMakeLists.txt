@@ -12,6 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install")
 
 set(CMAKE_BUILD_TYPE "Debug" CACHE STRING " " FORCE)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-fPIC)
 add_compile_options(-fno-rtti)
 add_subdirectory(third_party)
@@ -39,3 +40,4 @@ set(NS_MLIR_TRANSFORM_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/cherry_include.mlir")
 
 add_subdirectory(core)
 add_subdirectory(runtime)
+add_subdirectory(python)

@@ -61,8 +61,7 @@ def WeightOp : Cherry_Op<"weight", [Pure, DeclareOpInterfaceMethods<ShapeInferen
     let arguments = (ins 
         StrAttr:$path,
         I64ArrayAttr:$shape,
-        TypeAttr:$elem_type 
-
+        TypeAttr:$elem_type
     );
 
     let results = (outs AnyCherryTensor:$output);
