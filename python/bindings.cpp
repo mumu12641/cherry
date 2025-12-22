@@ -33,6 +33,10 @@ using namespace mlir;
 struct PyValue
 {
     Value value;
+    PyValue(Value v)
+        : value(v)
+    {
+    }
 };
 struct PyType
 {
@@ -78,7 +82,7 @@ public:
         // builder->setInsertionPointToEnd(module.getBody());
     }
 
-    PyType create_type(std::string name)
+    PyType createType(std::string name)
     {
         if (name == "f32") return PyType(builder->getF32Type());
         if (name == "i32") return PyType(builder->getI32Type());
@@ -101,10 +105,10 @@ public:
         return PyCherryTensorType(type);
     }
 
-    void createFunction(std::string name, std::vector<PyType*> args = {},
-                        std::vector<PyType*> rets = {}, bool isPrivate = false)
+    py::list createFunction(std::string name, std::vector<PyType*> args = {},
+                            std::vector<PyType*> rets = {}, bool isPrivate = false)
     {
-        builder->setInsertionPointToEnd(module.getBody());
+        builder->setInsertionPointToEnd(module->getBody());
         auto              loc = builder->getUnknownLoc();
         std::vector<Type> inputTypes;
         for (auto* arg : args) inputTypes.push_back(arg->type);
@@ -117,6 +121,42 @@ public:
         if (isPrivate) funcOp.setPrivate();
         mlir::Block* entryBlock = &(funcOp.front());
         builder->setInsertionPointToStart(entryBlock);
+
+        py::list pyArgs;
+        for (auto arg : entryBlock->getArguments()) {
+            pyArgs.append(PyValue(arg));
+        }
+        return pyArgs;
+    }
+
+    py::object callOp(std::string callee_name, py::list args)
+    {
+        auto loc = builder->getUnknownLoc();
+
+        std::vector<Value> call_args;
+        for (auto handle : args) {
+            call_args.push_back(handle.cast<PyValue*>()->value);
+        }
+
+        auto calleeFunc = module->lookupSymbol<cherry::FuncOp>(callee_name);
+        if (!calleeFunc) throw std::runtime_error("Function not found: " + callee_name);
+
+        auto resultTypes = calleeFunc.getFunctionType().getResults();
+
+        auto callOp = builder->create<cherry::CallOp>(loc, callee_name, resultTypes, call_args);
+
+        int numResults = callOp.getNumResults();
+        if (numResults == 1) {
+            return py::cast(new PyValue(callOp.getResult(0)));
+        }
+        else {
+            py::list results;
+            for (auto res : callOp.getResults()) {
+                results.append(new PyValue(res));
+            }
+            return results;
+        }
+        return py::none();
     }
 
     void runtimeCallOp(const std::string& callee, py::args args, py::kwargs kwargs)
@@ -148,7 +188,7 @@ public:
     }
 
 
-    void returnOp(py::args args)
+    void returnOp(py::list args)
     {
         auto loc = builder->getUnknownLoc();
 
@@ -163,7 +203,7 @@ public:
             }
         }
 
-        builder->create<cherry::ReturnOp>(loc, operands);
+        builder->create<cherry::ReturnOp>(loc, ValueRange(operands));
     }
 
     PyValue weightOp(const std::string& path, std::vector<int64_t> shape, std::string& dtype)
@@ -185,6 +225,29 @@ public:
         return PyValue{op.getResult()};
     }
 
+    PyValue tensorSliceOp(PyValue input, py::list starts, std::vector<int64_t> sizes)
+    {
+        auto loc       = builder->getUnknownLoc();
+        auto inputType = dyn_cast<cherry::CherryTensorType>(input.value.getType());
+        if (!inputType) throw std::runtime_error("Input to tensor_slice must be a CherryTensor");
+
+        Type               elementType = inputType.getElementType();
+        std::vector<Value> startIndices;
+        for (auto handle : starts) {
+            try {
+                startIndices.push_back(handle.cast<PyValue*>()->value);
+            }
+            catch (const py::cast_error&) {
+                throw std::runtime_error("Start indices must be Value objects (i64)");
+            }
+        }
+        auto sizesAttr  = builder->getI64ArrayAttr(sizes);
+        auto resultType = cherry::CherryTensorType::get(builder->getContext(), sizes, elementType);
+        auto op         = builder->create<cherry::TensorSliceOp>(
+            loc, resultType, input.value, startIndices, sizesAttr);
+        return PyValue{op.getResult()};
+    }
+
     PyValue constantOp(py::object value)
     {
         auto loc = builder->getUnknownLoc();
@@ -197,8 +260,8 @@ public:
         }
         else if (py::isinstance<py::int_>(value)) {
             int  v    = value.cast<int>();
-            auto type = builder->getI32Type();
-            auto attr = builder->getI32IntegerAttr(v);
+            auto type = builder->getI64Type();
+            auto attr = builder->getI64IntegerAttr(v);
             auto op   = builder->create<cherry::ConstantOp>(loc, type, attr);
             return PyValue{op.getResult()};
         }
@@ -220,7 +283,123 @@ public:
         return PyValue{op.getResult()};
     }
 
-    py::list createLoop(py::list initialArgs, py::function cond, py::function body)
+    py::list createForLoop(int start, int stop, int step, py::list initialArgs, py::function body)
+    {
+        auto               loc = builder->getUnknownLoc();
+        std::vector<Value> iterArgs;
+
+        for (auto handle : initialArgs) {
+            PyValue* val = handle.cast<PyValue*>();
+            iterArgs.push_back(val->value);
+        }
+
+        auto startValue = builder->create<arith::ConstantOp>(
+            loc, builder->getIndexType(), builder->getIndexAttr(start));
+        auto stopValue = builder->create<arith::ConstantOp>(
+            loc, builder->getIndexType(), builder->getIndexAttr(stop));
+        auto stepValue = builder->create<arith::ConstantOp>(
+            loc, builder->getIndexType(), builder->getIndexAttr(step));
+
+        auto forOp = builder->create<scf::ForOp>(loc, startValue, stopValue, stepValue, iterArgs);
+        {
+            Block* bodyBlock = forOp.getBody();
+            builder->setInsertionPointToStart(bodyBlock);
+
+            py::list blockArgs;
+            for (auto arg : bodyBlock->getArguments()) {
+                blockArgs.append(PyValue{arg});
+            }
+
+            py::object ret = body(*blockArgs);
+
+            std::vector<Value> yieldArgs;
+            if (py::isinstance<py::list>(ret)) {
+                for (auto item : ret.cast<py::list>()) {
+                    yieldArgs.push_back(item.cast<PyValue*>()->value);
+                }
+            }
+            else if (py::isinstance<py::tuple>(ret)) {
+                for (auto item : ret.cast<py::tuple>()) {
+                    yieldArgs.push_back(item.cast<PyValue*>()->value);
+                }
+            }
+            else {
+                if (!ret.is_none()) {
+                    yieldArgs.push_back(ret.cast<PyValue*>()->value);
+                }
+            }
+            builder->create<scf::YieldOp>(loc, yieldArgs);
+        }
+        builder->setInsertionPointAfter(forOp);
+        py::list results;
+        for (auto res : forOp.getResults()) {
+            results.append(PyValue{res});
+        }
+        return results;
+    }
+    // py::list createForLoop(int start, int stop, int step, py::list initialArgs, py::function
+    // body)
+    // {
+    //     auto               loc = builder->getUnknownLoc();
+    //     std::vector<Value> iterArgs;
+
+    //     for (auto handle : initialArgs) {
+    //         PyValue* val = handle.cast<PyValue*>();
+    //         iterArgs.push_back(val->value);
+    //     }
+
+    //     auto startValue = builder->create<arith::ConstantOp>(
+    //         loc, builder->getIndexType(), builder->getIndexAttr(start));
+    //     auto stopValue = builder->create<arith::ConstantOp>(
+    //         loc, builder->getIndexType(), builder->getIndexAttr(stop));
+    //     auto stepValue = builder->create<arith::ConstantOp>(
+    //         loc, builder->getIndexType(), builder->getIndexAttr(step));
+
+    //     auto forOp = builder->create<scf::ForOp>(loc, startValue, stopValue, stepValue,
+    //     iterArgs);
+
+    //     {
+    //         Block* bodyBlock = forOp.getBody();
+    //         builder->setInsertionPointToStart(bodyBlock);
+
+    //         py::list blockArgs;
+    //         for (auto arg : bodyBlock->getArguments()) {
+    //             blockArgs.append(PyValue{arg});
+    //         }
+
+    //         py::object ret = body(*blockArgs);
+
+    //         std::vector<Value> yieldArgs;
+    //         if (py::isinstance<py::list>(ret)) {
+    //             for (auto item : ret.cast<py::list>()) {
+    //                 yieldArgs.push_back(item.cast<PyValue*>()->value);
+    //             }
+    //         }
+    //         else if (py::isinstance<py::tuple>(ret)) {
+    //             for (auto item : ret.cast<py::tuple>()) {
+    //                 yieldArgs.push_back(item.cast<PyValue*>()->value);
+    //             }
+    //         }
+    //         else {
+    //             if (!ret.is_none()) {
+    //                 yieldArgs.push_back(ret.cast<PyValue*>()->value);
+    //             }
+    //         }
+
+    //         builder->create<scf::YieldOp>(loc, yieldArgs);
+    //     }
+
+    //     builder->setInsertionPointAfter(forOp);
+
+    //     py::list results;
+    //     for (auto res : forOp.getResults()) {
+    //         results.append(PyValue{res});
+    //     }
+
+    //     return results;
+    // }
+
+    py::list createWhileLoop(py::list initialArgs, py::function cond, py::function body)
     {
         auto               loc = builder->getUnknownLoc();
         std::vector<Value> iterArgs;
@@ -377,10 +556,10 @@ public:
     }
 
 private:
-    DialectRegistry              registry;
-    std::unique_ptr<MLIRContext> context;
-    std::unique_ptr<OpBuilder>   builder;
-    ModuleOp                     module;
+    DialectRegistry                   registry;
+    std::unique_ptr<MLIRContext>      context;
+    std::unique_ptr<OpBuilder>        builder;
+    mlir::OwningOpRef<mlir::ModuleOp> module;
 };
 
 PYBIND11_MODULE(core, m)
@@ -393,16 +572,19 @@ PYBIND11_MODULE(core, m)
 
     py::class_<IrGenerator>(m, "IrGenerator")
         .def(py::init<>())
-        .def("create_type", &IrGenerator::create_type)
+        .def("create_type", &IrGenerator::createType)
         .def("create_tensor_type", &IrGenerator::createTensorType)
         .def("create_function", &IrGenerator::createFunction)
+        .def("call", &IrGenerator::callOp)
         .def("ret", &IrGenerator::returnOp)
         .def("constant", &IrGenerator::constantOp)
         .def("runtime_call", &IrGenerator::runtimeCallOp)
         .def("load_weight", &IrGenerator::weightOp)
+        .def("tensor_slice", &IrGenerator::tensorSliceOp)
         .def("dump", &IrGenerator::dump)
         .def("create_tensor", &IrGenerator::createTensorOp)
-        .def("create_loop", &IrGenerator::createLoop)
+        .def("create_while_loop", &IrGenerator::createWhileLoop)
+        .def("create_for_loop", &IrGenerator::createForLoop)
         .def("cmpi", &IrGenerator::cmpiOp)
         .def("scalar_add", &IrGenerator::scalarAddOp)
         .def("scalar_sub", &IrGenerator::scalarSubOp)

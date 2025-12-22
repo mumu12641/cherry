@@ -1,0 +1,38 @@
+{
+  "config": {
+    "N_LAYERS": 12,
+    "MAX_SEQ": 1024,
+    "DIM": 768,
+    "VOCAB": 32000,
+    "HIDDEN": 2048,
+    "BATCH": 1
+  },
+  "functions": {
+    "llama_forward": {
+      "private": true,
+      "inputs": [
+        {"name": "token_id",      "type": "i64"},
+        {"name": "pos",           "type": "i64"},
+        {"name": "k_cache",       "type": [["N_LAYERS", "MAX_SEQ", "DIM"], "f32"]},
+        {"name": "v_cache",       "type": [["N_LAYERS", "MAX_SEQ", "DIM"], "f32"]},
+        {"name": "embed_table",   "type": [["VOCAB", "DIM"], "f32"]},
+        {"name": "rms_att_w",     "type": [["N_LAYERS", "DIM"], "f32"]},
+        {"name": "wq",            "type": [["N_LAYERS", "DIM", "DIM"], "f32"]},
+        {"name": "wk",            "type": [["N_LAYERS", "DIM", "DIM"], "f32"]},
+        {"name": "wv",            "type": [["N_LAYERS", "DIM", "DIM"], "f32"]},
+        {"name": "wo",            "type": [["N_LAYERS", "DIM", "DIM"], "f32"]},
+        {"name": "rms_ffn_w",     "type": [["N_LAYERS", "DIM"], "f32"]},
+        {"name": "w1",            "type": [["N_LAYERS", "DIM", "HIDDEN"], "f32"]},
+        {"name": "w2",            "type": [["N_LAYERS", "HIDDEN", "DIM"], "f32"]},
+        {"name": "w3",            "type": [["N_LAYERS", "DIM", "HIDDEN"], "f32"]},
+        {"name": "rms_final_w",   "type": [["DIM"], "f32"]},
+        {"name": "wcls",          "type": [["DIM", "VOCAB"], "f32"]}
+      ],
+      "outputs": [
+        {"type": [["BATCH", "VOCAB"], "f32"]},
+        {"type": [["N_LAYERS", "MAX_SEQ", "DIM"], "f32"]},
+        {"type": [["N_LAYERS", "MAX_SEQ", "DIM"], "f32"]}
+      ]
+    }
+  }
+}

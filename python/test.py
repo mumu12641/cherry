@@ -1,71 +1,56 @@
 import cherry.core as core
+from tools import from_json_config
 
 ir = core.IrGenerator()
 
 
-def build_llama_forward():
-    N_LAYERS = 12
-    MAX_SEQ = 1024
-    DIM = 768
-    VOCAB = 32000
-    HIDDEN = 2048
+def build_model():
+    @from_json_config(ir, "llama110M.json")
+    def llama_forward(
+        token_id,
+        pos,
+        k_cache,
+        v_cache,
+        embed_table,
+        rms_att_w,
+        wq,
+        wk,
+        wv,
+        wo,
+        rms_ffn_w,
+        w1,
+        w2,
+        w3,
+        rms_final_w,
+        wcls,
+    ):
+        zero = ir.constant(0)
+        one = ir.constant(1)
+        dim = ir.constant(768)
+        ffn_dim = ir.constant(2048)
+        head_num = ir.constant(12)
+        head_dim = ir.constant(64)
+        scale_val = ir.constant(0.125)
+        max_len = ir.constant(1024)
+        vocab_size = ir.constant(32000)
+        valid_len = ir.scalar_add(pos, one)
 
-    i64 = ir.create_type("i64")
-    f32 = ir.create_type("f32")
+        x = ir.tensor_slice(embed_table, [token_id, zero], [1, 768])
 
-    # KV Cache: [12, 1024, 768]
-    t_cache = ir.create_tensor_type([N_LAYERS, MAX_SEQ, DIM], f32)
+        def body(iv, curr_x, curr_k_cache, curr_v_cache):
+            return curr_x, curr_k_cache, curr_v_cache
 
-    # Embedding Table: [32000, 768]
-    t_embed = ir.create_tensor_type([VOCAB, DIM], f32)
+        x_final, k_cache_final, v_cache_final = ir.create_for_loop(
+            0, 12, 1, [x, k_cache, v_cache], body
+        )
 
-    # Layer Norm Weights: [12, 768] (用于 rms_att_weight, rms_ffn_weight)
-    t_layer_norm = ir.create_tensor_type([N_LAYERS, DIM], f32)
+        logits = ir.create_tensor([0.0], [1, 32000])
 
-    # Attention Weights: [12, 768, 768] (用于 wq, wk, wv, wo)
-    t_attn_weight = ir.create_tensor_type([N_LAYERS, DIM, DIM], f32)
-
-    # FFN Weights
-    # Gate/Up: [12, 768, 2048]
-    t_ffn_up = ir.create_tensor_type([N_LAYERS, DIM, HIDDEN], f32)
-    # Down: [12, 2048, 768]
-    t_ffn_down = ir.create_tensor_type([N_LAYERS, HIDDEN, DIM], f32)
-
-    # Final Norm: [768]
-    t_final_norm = ir.create_tensor_type([DIM], f32)
-
-    # Classifier (Output Head): [768, 32000]
-    t_classifier = ir.create_tensor_type([DIM, VOCAB], f32)
-
-    # Output Logits: [1, 32000]
-    t_logits = ir.create_tensor_type([1, VOCAB], f32)
-
-    args = [
-        i64,
-        i64,
-        t_cache,
-        t_cache,
-        t_embed,
-        t_layer_norm,
-        t_attn_weight,
-        t_attn_weight,
-        t_attn_weight,
-        t_attn_weight,
-        t_layer_norm,
-        t_ffn_up,
-        t_ffn_down,
-        t_ffn_up,
-        t_final_norm,
-        t_classifier,
-    ]
-
-    rets = [t_logits, t_cache, t_cache]
-
-    ir.create_function("llama_forward", args, rets, True)
-    ir.ret()
+        return logits, k_cache_final, v_cache_final
 
 
-build_llama_forward()
+build_model()
+
 ir.create_function("host", [], [], False)
 vocab_size = ir.constant(32000)
 ir.runtime_call(
@@ -105,14 +90,35 @@ def body_fn(curr_token, curr_pos, curr_k, curr_v):
     one = ir.constant(1)
     next_pos = ir.scalar_add(curr_pos, one)
     next_token = curr_token
+    res = ir.call(
+        "llama_forward",
+        [
+            curr_token,
+            curr_pos,
+            curr_k,
+            curr_v,
+            embedding,
+            rms_att,
+            wq,
+            wk,
+            wv,
+            wo,
+            rms_ffn,
+            w1,
+            w2,
+            w3,
+            rms_final,
+            wcls,
+        ],
+    )
 
     return [next_token, next_pos, curr_k, curr_v]
 
 
 initial_args = [start_token, start_pos, k_cache_init, v_cache_init]
 
-results = ir.create_loop(initial_args, cond_fn, body_fn)
+results = ir.create_while_loop(initial_args, cond_fn, body_fn)
 
 final_token, final_pos, final_k, final_v = results
-ir.ret()
+ir.ret([])
 print(ir.dump())
