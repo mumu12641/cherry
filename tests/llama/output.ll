@@ -38,8 +38,6 @@ declare void @end(i64)
 
 declare void @decode(i64, i64)
 
-declare void @start()
-
 declare { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_768_32000_f32(ptr, ptr, i64, i64, i64, i64, i64)
 
 declare { ptr, ptr, i64, [1 x i64], [1 x i64] } @cherry_read_weight_1d_768_f32(ptr, ptr, i64, i64, i64, i64)
@@ -54,7 +52,7 @@ declare { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_12_768_f3
 
 declare { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_32000_768_f32(ptr, ptr, i64, i64, i64, i64, i64)
 
-declare void @build_tokenizer(i64, ptr, ptr, i64, i64, i64)
+declare void @builder_tokenizer(i64, ptr, ptr, i64, i64, i64)
 
 define void @host() {
   %1 = call ptr @malloc(i64 add (i64 ptrtoint (ptr getelementptr (i8, ptr null, i32 49) to i64), i64 64))
@@ -64,7 +62,7 @@ define void @host() {
   %5 = sub i64 %3, %4
   %6 = inttoptr i64 %5 to ptr
   call void @llvm.memcpy.p0.p0.i64(ptr %6, ptr @__constant_49xi8, i64 mul (i64 ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i64), i64 49), i1 false)
-  call void @build_tokenizer(i64 32000, ptr %1, ptr %6, i64 0, i64 49, i64 1)
+  call void @builder_tokenizer(i64 32000, ptr %1, ptr %6, i64 0, i64 49, i64 1)
   %7 = call { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_32000_768_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_62xi8, i64 0, i64 62, i64 1, i64 32000, i64 768)
   %8 = call { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_12_768_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_67xi8_0, i64 0, i64 67, i64 1, i64 12, i64 768)
   %9 = call { ptr, ptr, i64, [3 x i64], [3 x i64] } @cherry_read_weight_3d_12_768_768_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_55xi8_5, i64 0, i64 55, i64 1, i64 12, i64 768, i64 768)
@@ -77,7 +75,6 @@ define void @host() {
   %16 = call { ptr, ptr, i64, [3 x i64], [3 x i64] } @cherry_read_weight_3d_12_768_2048_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_55xi8, i64 0, i64 55, i64 1, i64 12, i64 768, i64 2048)
   %17 = call { ptr, ptr, i64, [1 x i64], [1 x i64] } @cherry_read_weight_1d_768_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_60xi8, i64 0, i64 60, i64 1, i64 768)
   %18 = call { ptr, ptr, i64, [2 x i64], [2 x i64] } @cherry_read_weight_2d_768_32000_f32(ptr inttoptr (i64 3735928559 to ptr), ptr @__constant_57xi8, i64 0, i64 57, i64 1, i64 768, i64 32000)
-  call void @start()
   %19 = call ptr @malloc(i64 add (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 9437184) to i64), i64 64))
   %20 = ptrtoint ptr %19 to i64
   %21 = add i64 %20, 63
@@ -114,7 +111,7 @@ define void @host() {
 
 49:                                               ; preds = %2239, %0
   %50 = phi i64 [ %2240, %2239 ], [ 1, %0 ]
-  %51 = phi i64 [ %112, %2239 ], [ 0, %0 ]
+  %51 = phi i64 [ %110, %2239 ], [ 0, %0 ]
   %52 = phi { ptr, ptr, i64, [3 x i64], [3 x i64] } [ %130, %2239 ], [ %33, %0 ]
   %53 = phi { ptr, ptr, i64, [3 x i64], [3 x i64] } [ %131, %2239 ], [ %48, %0 ]
   %54 = icmp slt i64 %51, 30
@@ -177,9 +174,9 @@ define void @host() {
   %107 = phi i64 [ %51, %49 ]
   %108 = phi { ptr, ptr, i64, [3 x i64], [3 x i64] } [ %69, %49 ]
   %109 = phi { ptr, ptr, i64, [3 x i64], [3 x i64] } [ %94, %49 ]
-  %110 = extractvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %7, 1
-  %111 = mul i64 %106, 768
-  %112 = add i64 %107, 1
+  %110 = add i64 %107, 1
+  %111 = extractvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %7, 1
+  %112 = mul i64 %106, 768
   %113 = call ptr @malloc(i64 add (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 768) to i64), i64 64))
   %114 = ptrtoint ptr %113 to i64
   %115 = add i64 %114, 63
@@ -193,7 +190,7 @@ define void @host() {
   %123 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %122, i64 768, 3, 1
   %124 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %123, i64 768, 4, 0
   %125 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %124, i64 1, 4, 1
-  %126 = getelementptr float, ptr %110, i64 %111
+  %126 = getelementptr float, ptr %111, i64 %112
   call void @llvm.memcpy.p0.p0.i64(ptr %118, ptr %126, i64 mul (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 1) to i64), i64 768), i1 false)
   br label %127
 
@@ -1569,7 +1566,7 @@ define void @host() {
   br label %1036
 
 1087:                                             ; preds = %1036
-  %1088 = mul i64 %112, 1
+  %1088 = mul i64 %110, 1
   %1089 = getelementptr float, ptr null, i64 %1088
   %1090 = ptrtoint ptr %1089 to i64
   %1091 = add i64 %1090, 64
@@ -1583,23 +1580,23 @@ define void @host() {
   %1099 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1098, ptr %1097, 1
   %1100 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1099, i64 0, 2
   %1101 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1100, i64 1, 3, 0
-  %1102 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1101, i64 %112, 3, 1
-  %1103 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1102, i64 %112, 4, 0
+  %1102 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1101, i64 %110, 3, 1
+  %1103 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1102, i64 %110, 4, 0
   %1104 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1103, i64 1, 4, 1
   br label %1105
 
 1105:                                             ; preds = %1132, %1087
   %1106 = phi i64 [ %1140, %1132 ], [ 0, %1087 ]
-  %1107 = icmp slt i64 %1106, %112
+  %1107 = icmp slt i64 %1106, %110
   br i1 %1107, label %1108, label %1141
 
 1108:                                             ; preds = %1105
   %1109 = mul i64 %1106, -1
-  %1110 = add i64 %112, %1109
+  %1110 = add i64 %110, %1109
   %1111 = call i64 @llvm.smin.i64(i64 %1110, i64 8)
   %1112 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1099, i64 %1106, 2
   %1113 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1112, i64 1, 3, 0
-  %1114 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1113, i64 %112, 4, 0
+  %1114 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1113, i64 %110, 4, 0
   %1115 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1114, i64 %1111, 3, 1
   %1116 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1115, i64 1, 4, 1
   br label %1117
@@ -1619,7 +1616,7 @@ define void @host() {
 
 1124:                                             ; preds = %1121
   %1125 = getelementptr float, ptr %1097, i64 %1106
-  %1126 = mul i64 %1118, %112
+  %1126 = mul i64 %1118, %110
   %1127 = add i64 %1126, %1122
   %1128 = getelementptr float, ptr %1125, i64 %1127
   store float 0.000000e+00, ptr %1128, align 4
@@ -1652,7 +1649,7 @@ define void @host() {
 
 1142:                                             ; preds = %1204, %1141
   %1143 = phi i64 [ %1205, %1204 ], [ 0, %1141 ]
-  %1144 = icmp slt i64 %1143, %112
+  %1144 = icmp slt i64 %1143, %110
   br i1 %1144, label %1145, label %1206
 
 1145:                                             ; preds = %1142
@@ -1665,14 +1662,14 @@ define void @host() {
 
 1149:                                             ; preds = %1146
   %1150 = mul i64 %1143, -1
-  %1151 = add i64 %112, %1150
+  %1151 = add i64 %110, %1150
   %1152 = call i64 @llvm.smin.i64(i64 %1151, i64 8)
   %1153 = add i64 %1029, %1147
   %1154 = mul i64 %1147, 1024
   %1155 = add i64 %1154, %1143
   %1156 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1099, i64 %1143, 2
   %1157 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1156, i64 1, 3, 0
-  %1158 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1157, i64 %112, 4, 0
+  %1158 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1157, i64 %110, 4, 0
   %1159 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1158, i64 %1152, 3, 1
   %1160 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1159, i64 1, 4, 1
   br label %1161
@@ -1710,7 +1707,7 @@ define void @host() {
   %1181 = getelementptr float, ptr %1178, i64 %1180
   %1182 = load float, ptr %1181, align 4
   %1183 = getelementptr float, ptr %1097, i64 %1143
-  %1184 = mul i64 %1162, %112
+  %1184 = mul i64 %1162, %110
   %1185 = add i64 %1184, %1166
   %1186 = getelementptr float, ptr %1183, i64 %1185
   %1187 = load float, ptr %1186, align 4
@@ -1804,7 +1801,7 @@ define void @host() {
   %1238 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1237, i64 0, 2
   %1239 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1238, i64 1, 3, 0
   %1240 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1239, i64 1024, 4, 0
-  %1241 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1240, i64 %112, 3, 1
+  %1241 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1240, i64 %110, 3, 1
   %1242 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %1241, i64 1, 4, 1
   %1243 = call ptr @llvm.stacksave.p0()
   %1244 = alloca { ptr, ptr, i64, [2 x i64], [2 x i64] }, i64 1, align 8

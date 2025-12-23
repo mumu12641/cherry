@@ -5,6 +5,7 @@
 #include "Interfaces/CherryInterface.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/Matchers.h"
@@ -179,7 +180,18 @@ void FuncOp::print(mlir::OpAsmPrinter& p)
 }
 
 //===----------------------------------------------------------------------===//
-// ::mlir::cherry::TensorSliceOp
+// ::mlir::cherry::CreateTensorOp
+//===----------------------------------------------------------------------===//
+void CreateTensorOp::inferShapes()
+{
+    auto value = getValue();
+    auto tensorType = cast<DenseElementsAttr>(value).getType();
+    getResult().setType(
+        CherryTensorType::get(getContext(), tensorType.getShape(), tensorType.getElementType()));
+}
+
+//===----------------------------------------------------------------------===//
+// ::mlir::cherry::WeightOp
 //===----------------------------------------------------------------------===//
 void WeightOp::inferShapes()
 {

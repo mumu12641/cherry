@@ -2,6 +2,7 @@
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
 #include "Interfaces/CherryInterface.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Types.h"
@@ -61,6 +62,38 @@ void ShapeInferencePass::runOnOperation()
         if (auto shapeInferenceOp = llvm::dyn_cast<ShapeInference>(op)) {
 
             shapeInferenceOp.inferShapes();
+        }
+        else if (auto forOp = llvm::dyn_cast<scf::ForOp>(op)) {
+            auto   initArgs = forOp.getInitArgs();
+            auto   results  = forOp.getResults();
+            Block* body     = forOp.getBody();
+            for (size_t i = 0; i < initArgs.size(); ++i) {
+                Type staticType = initArgs[i].getType();
+                results[i].setType(staticType);
+                body->getArgument(i + 1).setType(staticType);
+            }
+        }
+        else if (auto whileOp = llvm::dyn_cast<scf::WhileOp>(op)) {
+            auto   inits       = whileOp.getInits();
+            Block& beforeBlock = whileOp.getBefore().front();
+            Block& afterBlock  = whileOp.getAfter().front();
+
+            for (size_t i = 0; i < inits.size(); ++i) {
+                Type staticType = inits[i].getType();
+                beforeBlock.getArgument(i).setType(staticType);
+            }
+
+            auto conditionOp   = llvm::dyn_cast<scf::ConditionOp>(beforeBlock.getTerminator());
+            auto conditionArgs = conditionOp.getArgs();
+            auto results       = whileOp.getResults();
+
+            for (size_t i = 0; i < conditionArgs.size(); ++i) {
+                Type staticType = conditionArgs[i].getType();
+
+                results[i].setType(staticType);
+
+                afterBlock.getArgument(i).setType(staticType);
+            }
         }
         else {
             op->emitError("unable to infer shape of operation without shape "

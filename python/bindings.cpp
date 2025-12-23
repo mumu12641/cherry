@@ -30,6 +30,50 @@
 namespace py = pybind11;
 using namespace mlir;
 
+#define DEFINE_TENSOR_BINARY_OP(Name, OpClass)                                \
+    PyValue Name(PyValue lhs, PyValue rhs)                                    \
+    {                                                                         \
+        auto inputType = cast<cherry::CherryTensorType>(lhs.value.getType()); \
+        auto op        = builder->create<cherry::OpClass>(                    \
+            builder->getUnknownLoc(),                                  \
+            this->createDynamicTensorType(inputType.getElementType()), \
+            lhs.value,                                                 \
+            rhs.value);                                                \
+        return PyValue(op.getResult());                                       \
+    }
+
+#define DEFINE_TENSOR_UNARY_OP(Name, OpClass)                                     \
+    PyValue Name(PyValue operand)                                                 \
+    {                                                                             \
+        auto inputType = cast<cherry::CherryTensorType>(operand.value.getType()); \
+        auto op        = builder->create<cherry::OpClass>(                        \
+            builder->getUnknownLoc(),                                      \
+            this->createDynamicTensorType(inputType.getElementType()),     \
+            operand.value);                                                \
+        return PyValue(op.getResult());                                           \
+    }
+
+#define DEFINE_TENSOR_SCALAR_OP(Name, OpClass)                                  \
+    PyValue Name(PyValue input, PyValue scalar)                                 \
+    {                                                                           \
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType()); \
+        auto op        = builder->create<cherry::OpClass>(                      \
+            builder->getUnknownLoc(),                                    \
+            this->createDynamicTensorType(inputType.getElementType()),   \
+            input.value,                                                 \
+            scalar.value);                                               \
+        return PyValue(op.getResult());                                         \
+    }
+
+#define DEFINE_SCALAR_OP(Name, OpClass)                                          \
+    PyValue Name(PyValue lhs, PyValue rhs)                                       \
+    {                                                                            \
+        Type resultType = lhs.value.getType();                                   \
+        auto op         = builder->create<cherry::OpClass>(                      \
+            builder->getUnknownLoc(), resultType, lhs.value, rhs.value); \
+        return PyValue{op.getResult()};                                          \
+    }
+
 struct PyValue
 {
     Value value;
@@ -61,6 +105,12 @@ struct PyCherryTensorType : public PyType
 
 class IrGenerator
 {
+private:
+    mlir::Type createDynamicTensorType(mlir::Type elementType = FloatType())
+    {
+        return mlir::cherry::CherryTensorType::get(context.get(), {-1}, elementType);
+    }
+
 public:
     IrGenerator()
     {
@@ -79,7 +129,6 @@ public:
 
         builder = std::make_unique<OpBuilder>(context.get());
         module  = ModuleOp::create(builder->getUnknownLoc());
-        // builder->setInsertionPointToEnd(module.getBody());
     }
 
     PyType createType(std::string name)
@@ -89,6 +138,14 @@ public:
         if (name == "i64") return PyType(builder->getI64Type());
         if (name == "index") return PyType(builder->getIndexType());
         throw std::runtime_error("Unknown scalar type: " + name);
+    }
+
+    PyType createType(mlir::Type type)
+    {
+        if (isa<mlir::FloatType>(type)) return PyType(builder->getF32Type());
+        if (isa<mlir::IntegerType>(type)) return PyType(builder->getI32Type());
+        if (isa<mlir::IndexType>(type)) return PyType(builder->getIndexType());
+        throw std::runtime_error("Unknown type");
     }
 
     PyCherryTensorType createTensorType(std::vector<int64_t> shape, PyType elementType)
@@ -202,7 +259,6 @@ public:
                 throw std::runtime_error("Return arguments must be Value objects");
             }
         }
-
         builder->create<cherry::ReturnOp>(loc, ValueRange(operands));
     }
 
@@ -241,10 +297,50 @@ public:
                 throw std::runtime_error("Start indices must be Value objects (i64)");
             }
         }
-        auto sizesAttr  = builder->getI64ArrayAttr(sizes);
-        auto resultType = cherry::CherryTensorType::get(builder->getContext(), sizes, elementType);
-        auto op         = builder->create<cherry::TensorSliceOp>(
-            loc, resultType, input.value, startIndices, sizesAttr);
+        auto sizesAttr = builder->getI64ArrayAttr(sizes);
+        auto op        = builder->create<cherry::TensorSliceOp>(
+            loc, this->createDynamicTensorType(elementType), input.value, startIndices, sizesAttr);
+        return PyValue{op.getResult()};
+    }
+
+    PyValue tensorSetSliceOp(PyValue dest, PyValue src, py::list indices)
+    {
+        auto               srcType = cast<cherry::CherryTensorType>(src.value.getType());
+        std::vector<Value> values;
+        for (auto handle : indices) {
+            values.push_back(handle.cast<PyValue*>()->value);
+        }
+        auto op = builder->create<cherry::TensorSetSliceOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(srcType.getElementType()),
+            dest.value,
+            src.value,
+            ValueRange(values));
+        return PyValue{op.getResult()};
+    }
+
+    PyValue ropeOp(PyValue input, PyValue pos)
+    {
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType());
+        auto op        = builder->create<cherry::RopeOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(inputType.getElementType()),
+            input.value,
+            pos.value);
+        return PyValue{op.getResult()};
+    }
+
+    PyValue tensorGetOp(PyValue input, py::list indices)
+    {
+        std::vector<Value> idxs;
+        for (auto handle : indices) {
+            idxs.push_back(handle.cast<PyValue*>()->value);
+        }
+        auto op = builder->create<cherry::TensorGetOp>(
+            builder->getUnknownLoc(),
+            cast<cherry::CherryTensorType>(input.value.getType()).getElementType(),
+            input.value,
+            ValueRange(idxs));
         return PyValue{op.getResult()};
     }
 
@@ -270,16 +366,15 @@ public:
 
     PyValue createTensorOp(py::list data, std::vector<int64_t> shape)
     {
-        auto loc = builder->getUnknownLoc();
-        auto resultType =
-            cherry::CherryTensorType::get(builder->getContext(), shape, builder->getF32Type());
+        auto               loc        = builder->getUnknownLoc();
         auto               tensorType = RankedTensorType::get(shape, builder->getF32Type());
         std::vector<float> values;
         for (auto item : data) {
             values.push_back(item.cast<float>());
         }
         ElementsAttr valueAttr = DenseElementsAttr::get(tensorType, llvm::ArrayRef(values));
-        auto         op = builder->create<cherry::CreateTensorOp>(loc, resultType, valueAttr);
+        auto         op        = builder->create<cherry::CreateTensorOp>(
+            loc, this->createDynamicTensorType(builder->getF32Type()), valueAttr);
         return PyValue{op.getResult()};
     }
 
@@ -337,67 +432,6 @@ public:
         }
         return results;
     }
-    // py::list createForLoop(int start, int stop, int step, py::list initialArgs, py::function
-    // body)
-    // {
-    //     auto               loc = builder->getUnknownLoc();
-    //     std::vector<Value> iterArgs;
-
-    //     for (auto handle : initialArgs) {
-    //         PyValue* val = handle.cast<PyValue*>();
-    //         iterArgs.push_back(val->value);
-    //     }
-
-    //     auto startValue = builder->create<arith::ConstantOp>(
-    //         loc, builder->getIndexType(), builder->getIndexAttr(start));
-    //     auto stopValue = builder->create<arith::ConstantOp>(
-    //         loc, builder->getIndexType(), builder->getIndexAttr(stop));
-    //     auto stepValue = builder->create<arith::ConstantOp>(
-    //         loc, builder->getIndexType(), builder->getIndexAttr(step));
-
-    //     auto forOp = builder->create<scf::ForOp>(loc, startValue, stopValue, stepValue,
-    //     iterArgs);
-
-    //     {
-    //         Block* bodyBlock = forOp.getBody();
-    //         builder->setInsertionPointToStart(bodyBlock);
-
-    //         py::list blockArgs;
-    //         for (auto arg : bodyBlock->getArguments()) {
-    //             blockArgs.append(PyValue{arg});
-    //         }
-
-    //         py::object ret = body(*blockArgs);
-
-    //         std::vector<Value> yieldArgs;
-    //         if (py::isinstance<py::list>(ret)) {
-    //             for (auto item : ret.cast<py::list>()) {
-    //                 yieldArgs.push_back(item.cast<PyValue*>()->value);
-    //             }
-    //         }
-    //         else if (py::isinstance<py::tuple>(ret)) {
-    //             for (auto item : ret.cast<py::tuple>()) {
-    //                 yieldArgs.push_back(item.cast<PyValue*>()->value);
-    //             }
-    //         }
-    //         else {
-    //             if (!ret.is_none()) {
-    //                 yieldArgs.push_back(ret.cast<PyValue*>()->value);
-    //             }
-    //         }
-
-    //         builder->create<scf::YieldOp>(loc, yieldArgs);
-    //     }
-
-    //     builder->setInsertionPointAfter(forOp);
-
-    //     py::list results;
-    //     for (auto res : forOp.getResults()) {
-    //         results.append(PyValue{res});
-    //     }
-
-    //     return results;
-    // }
 
     py::list createWhileLoop(py::list initialArgs, py::function cond, py::function body)
     {
@@ -474,6 +508,14 @@ public:
         return results;
     }
 
+    PyValue indexCastOp(PyValue index)
+    {
+        auto loc = builder->getUnknownLoc();
+
+        auto op = builder->create<arith::IndexCastOp>(loc, builder->getI64Type(), index.value);
+        return PyValue{op.getResult()};
+    }
+
     PyValue cmpiOp(PyValue lhs, PyValue rhs, std::string pred)
     {
         auto                 loc = builder->getUnknownLoc();
@@ -515,35 +557,113 @@ public:
         return PyValue{op.getResult()};
     }
 
-    PyValue scalarAddOp(PyValue lhs, PyValue rhs)
+    DEFINE_SCALAR_OP(scalarAddOp, ScalarAddOp)
+    DEFINE_SCALAR_OP(scalarSubOp, ScalarSubOp)
+    DEFINE_SCALAR_OP(scalarMulOp, ScalarMulOp)
+    DEFINE_SCALAR_OP(scalarDivOp, ScalarDivOp)
+
+    DEFINE_TENSOR_BINARY_OP(tensorAddOp, TensorAddOp)
+    DEFINE_TENSOR_BINARY_OP(tensorSubOp, TensorSubOp)
+    DEFINE_TENSOR_BINARY_OP(tensorMulOp, TensorMulOp)
+    DEFINE_TENSOR_BINARY_OP(tensorDivOp, TensorDivOp)
+    DEFINE_TENSOR_BINARY_OP(matmulOp, MatMulOp)
+
+    DEFINE_TENSOR_UNARY_OP(tensorNegOp, TensorNegOp)
+    DEFINE_TENSOR_UNARY_OP(tensorExpOp, TensorExpOp)
+    DEFINE_TENSOR_UNARY_OP(tensorReluOp, TensorReluOp)
+    DEFINE_TENSOR_UNARY_OP(tensorSiluOp, TensorSiluOp)
+    DEFINE_TENSOR_UNARY_OP(tensorSigmoidOp, TensorSigmoidOp)
+    DEFINE_TENSOR_UNARY_OP(tensorTanhOp, TensorTanhOp)
+
+    DEFINE_TENSOR_SCALAR_OP(tensorAddScalarOp, TensorAddScalarOp)
+    DEFINE_TENSOR_SCALAR_OP(tensorSubScalarOp, TensorSubScalarOp)
+    DEFINE_TENSOR_SCALAR_OP(tensorMulScalarOp, TensorMulScalarOp)
+    DEFINE_TENSOR_SCALAR_OP(tensorDivScalarOp, TensorDivScalarOp)
+
+
+    PyValue argmaxOp(PyValue input, int64_t dim)
     {
-        auto loc        = builder->getUnknownLoc();
-        Type resultType = lhs.value.getType();
-        auto op = builder->create<cherry::ScalarAddOp>(loc, resultType, lhs.value, rhs.value);
-        return PyValue{op.getResult()};
+        return PyValue(
+            builder->create<cherry::ArgMaxOp>(builder->getUnknownLoc(),
+                                              this->createDynamicTensorType(builder->getI64Type()),
+                                              input.value,
+                                              builder->getI64IntegerAttr(dim)));
     }
 
-    PyValue scalarSubOp(PyValue lhs, PyValue rhs)
+
+    PyValue transposeOp(PyValue input, std::vector<int64_t> perm)
     {
-        auto loc        = builder->getUnknownLoc();
-        Type resultType = lhs.value.getType();
-        auto op = builder->create<cherry::ScalarSubOp>(loc, resultType, lhs.value, rhs.value);
-        return PyValue{op.getResult()};
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType());
+        return PyValue(builder->create<cherry::TransposeOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(inputType.getElementType()),
+            input.value,
+            builder->getI64ArrayAttr(perm)));
     }
 
-    PyValue scalarMulOp(PyValue lhs, PyValue rhs)
+    PyValue broadcastOp(PyValue input, py::list target_shape)
     {
-        auto loc        = builder->getUnknownLoc();
-        Type resultType = lhs.value.getType();
-        auto op = builder->create<cherry::ScalarMulOp>(loc, resultType, lhs.value, rhs.value);
-        return PyValue{op.getResult()};
+        std::vector<Value> shapeVals;
+        for (auto handle : target_shape) {
+            shapeVals.push_back(handle.cast<PyValue*>()->value);
+        }
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType());
+        return PyValue(builder->create<cherry::BroadcastOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(inputType.getElementType()),
+            input.value,
+            shapeVals));
     }
 
-    PyValue scalarDivOp(PyValue lhs, PyValue rhs)
+    PyValue maskedMatMulOp(PyValue lhs, PyValue rhs, PyValue valid_len)
     {
-        auto loc        = builder->getUnknownLoc();
-        Type resultType = lhs.value.getType();
-        auto op = builder->create<cherry::ScalarDivOp>(loc, resultType, lhs.value, rhs.value);
+        auto lhsType = cast<cherry::CherryTensorType>(lhs.value.getType());
+        return PyValue(builder->create<cherry::MaskedMatMulOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(lhsType.getElementType()),
+            lhs.value,
+            rhs.value,
+            valid_len.value));
+    }
+
+    PyValue softmaxOp(PyValue input, int64_t axis)
+    {
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType());
+
+        return PyValue(builder->create<cherry::SoftmaxOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(inputType.getElementType()),
+            input.value,
+            builder->getI64IntegerAttr(axis)));
+    }
+
+
+    PyValue rmsnormOp(PyValue input, PyValue scale, float eps)
+    {
+        auto inputType = cast<cherry::CherryTensorType>(input.value.getType());
+
+        return PyValue(builder->create<cherry::RMSNormOp>(
+            builder->getUnknownLoc(),
+            this->createDynamicTensorType(inputType.getElementType()),
+            input.value,
+            scale.value,
+            builder->getF32FloatAttr(eps)));
+    }
+
+    void printOp(PyValue input)
+    {
+        builder->create<cherry::PrintOp>(builder->getUnknownLoc(), input.value);
+    }
+
+    PyValue reshapeOp(PyValue input, std::vector<int64_t> shape)
+    {
+        auto loc = builder->getUnknownLoc();
+        auto op  = builder->create<cherry::ReshapeOp>(
+            loc,
+            this->createDynamicTensorType(
+                cast<mlir::cherry::CherryTensorType>(input.value.getType()).getElementType()),
+            input.value,
+            builder->getI64ArrayAttr(shape));
         return PyValue{op.getResult()};
     }
 
@@ -553,6 +673,18 @@ public:
         llvm::raw_string_ostream os(s);
         module->print(os);
         return s;
+    }
+    void dumpToFile(const std::string& filename)
+    {
+        std::error_code      ec;
+        llvm::raw_fd_ostream fileStream(filename, ec);
+        if (ec) {
+            llvm::errs() << "Error opening file '" << filename << "': " << ec.message() << "\n";
+            return;
+        }
+        mlir::OpPrintingFlags flags;
+        flags.enableDebugInfo(false);
+        module->print(fileStream, flags);
     }
 
 private:
@@ -572,7 +704,8 @@ PYBIND11_MODULE(core, m)
 
     py::class_<IrGenerator>(m, "IrGenerator")
         .def(py::init<>())
-        .def("create_type", &IrGenerator::createType)
+        .def("create_type", py::overload_cast<std::string>(&IrGenerator::createType))
+        .def("create_type", py::overload_cast<mlir::Type>(&IrGenerator::createType))
         .def("create_tensor_type", &IrGenerator::createTensorType)
         .def("create_function", &IrGenerator::createFunction)
         .def("call", &IrGenerator::callOp)
@@ -582,12 +715,41 @@ PYBIND11_MODULE(core, m)
         .def("load_weight", &IrGenerator::weightOp)
         .def("tensor_slice", &IrGenerator::tensorSliceOp)
         .def("dump", &IrGenerator::dump)
+        .def("dump_to_file", &IrGenerator::dumpToFile)
         .def("create_tensor", &IrGenerator::createTensorOp)
         .def("create_while_loop", &IrGenerator::createWhileLoop)
         .def("create_for_loop", &IrGenerator::createForLoop)
         .def("cmpi", &IrGenerator::cmpiOp)
+        .def("index_cast", &IrGenerator::indexCastOp)
         .def("scalar_add", &IrGenerator::scalarAddOp)
         .def("scalar_sub", &IrGenerator::scalarSubOp)
         .def("scalar_mul", &IrGenerator::scalarMulOp)
-        .def("scalar_div", &IrGenerator::scalarDivOp);
+        .def("scalar_div", &IrGenerator::scalarDivOp)
+        .def("tensor_set_slice", &IrGenerator::tensorSetSliceOp)
+        .def("rope", &IrGenerator::ropeOp)
+        .def("tensor_get", &IrGenerator::tensorGetOp)
+        .def("reshape", &IrGenerator::reshapeOp)
+        .def("transpose", &IrGenerator::transposeOp)
+        .def("broadcast", &IrGenerator::broadcastOp)
+        .def("add", &IrGenerator::tensorAddOp)
+        .def("sub", &IrGenerator::tensorSubOp)
+        .def("mul", &IrGenerator::tensorMulOp)
+        .def("div", &IrGenerator::tensorDivOp)
+        .def("matmul", &IrGenerator::matmulOp)
+        .def("neg", &IrGenerator::tensorNegOp)
+        .def("exp", &IrGenerator::tensorExpOp)
+        .def("relu", &IrGenerator::tensorReluOp)
+        .def("silu", &IrGenerator::tensorSiluOp)
+        .def("sigmoid", &IrGenerator::tensorSigmoidOp)
+        .def("tanh", &IrGenerator::tensorTanhOp)
+        .def("tensor_add_scalar", &IrGenerator::tensorAddScalarOp)
+        .def("tensor_sub_scalar", &IrGenerator::tensorSubScalarOp)
+        .def("tensor_mul_scalar", &IrGenerator::tensorMulScalarOp)
+        .def("tensor_div_scalar", &IrGenerator::tensorDivScalarOp)
+        .def("argmax", &IrGenerator::argmaxOp)
+        .def("masked_matmul", &IrGenerator::maskedMatMulOp)
+        .def("softmax", &IrGenerator::softmaxOp)
+        .def("rmsnorm", &IrGenerator::rmsnormOp)
+        .def("print", &IrGenerator::printOp);
+    ;
 }

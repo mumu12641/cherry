@@ -14,7 +14,7 @@ CLANG_BIN="../../build/third_party/llvm-project/llvm/bin/clang++"
 LLVM_LIB="../../build/third_party/llvm-project/llvm/lib"
 RUNTIME_LIB="/home/nx/ycy/pb/cherry/build/runtime"
 
-INPUT_MLIR="/home/nx/ycy/pb/cherry/tests/llama/cherry.mlir"
+INPUT_MLIR="/home/nx/ycy/pb/cherry/tests/llama/cherry_python.mlir"
 OUTPUT_LL="cherry_output.ll"
 OUTPUT_EXE="llama.out"
 

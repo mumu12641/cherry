@@ -36,7 +36,7 @@ def Cherry_ConstantOp : Cherry_Op<"constant", [Pure]> {
   let assemblyFormat = "`(` $value `)` attr-dict `:` type($result)";
 }
 
-def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure]> {
+def Cherry_CreateTensorOp : Cherry_Op<"create_tensor", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "Create a constant tensor from attributes";
   let description = [{
     Creates a CherryTensor from a dense elements attribute.
