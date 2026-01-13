@@ -20,6 +20,7 @@ target_include_directories(cherry_py PRIVATE
 target_link_libraries(cherry_py PRIVATE
   CherryCore
   MLIRIR
+  cherry_runtime
 )
 
 set_target_properties(cherry_py PROPERTIES

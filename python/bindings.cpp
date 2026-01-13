@@ -671,7 +671,9 @@ public:
     {
         std::string              s;
         llvm::raw_string_ostream os(s);
-        module->print(os);
+        mlir::OpPrintingFlags flags;
+        flags.enableDebugInfo(false);
+        module->print(os, flags);
         return s;
     }
     void dumpToFile(const std::string& filename)

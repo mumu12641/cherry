@@ -149,7 +149,7 @@ build_model()
 ir.create_function("host", [], [], False)
 vocab_size = ir.constant(32000)
 ir.runtime_call(
-    "builder_tokenizer",
+    "build_tokenizer",
     vocab_size,
     str_args=["/home/nx/ycy/pb/cherry/tests/llama/tokenizer.bin"],
 )

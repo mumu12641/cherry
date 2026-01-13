@@ -29,7 +29,7 @@ TEST_NAME=$1
 
 # 构建文件路径
 INPUT_MLIR="${PROJECT_ROOT}/tests/components/${TEST_NAME}.mlir"
-OUTPUT_LL="${TEST_NAME}_output.ll"
+OUTPUT_LL="output.ll"
 OUTPUT_BIN="${TEST_NAME}.out"
 
 # 2. 检查输入文件是否存在

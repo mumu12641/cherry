@@ -92,7 +92,7 @@
   }) {sym_visibility = "private"} : () -> ()
   "cherry.func"() <{function_type = () -> (), sym_name = "host"}> ({
     %0 = "cherry.constant"() <{value = 32000 : i64}> : () -> i64
-    "cherry.runtime_call"(%0) <{callee = "builder_tokenizer", str_args = ["/home/nx/ycy/pb/cherry/tests/llama/tokenizer.bin"]}> : (i64) -> ()
+    "cherry.runtime_call"(%0) <{callee = "build_tokenizer", str_args = ["/home/nx/ycy/pb/cherry/tests/llama/tokenizer.bin"]}> : (i64) -> ()
     %1 = "cherry.weight"() <{elem_type = f32, path = "/home/nx/ycy/pb/cherry/utils/stories110M/token_embeddings.bin", shape = [32000, 768]}> : () -> !cherry.cherry_tensor<[32000x768xf32]>
     %2 = "cherry.weight"() <{elem_type = f32, path = "/home/nx/ycy/pb/cherry/utils/stories110M/layers_rms_att_weight.bin", shape = [12, 768]}> : () -> !cherry.cherry_tensor<[12x768xf32]>
     %3 = "cherry.weight"() <{elem_type = f32, path = "/home/nx/ycy/pb/cherry/utils/stories110M/layers_wq.bin", shape = [12, 768, 768]}> : () -> !cherry.cherry_tensor<[12x768x768xf32]>

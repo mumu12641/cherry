@@ -18,6 +18,7 @@ add_mlir_library(CherryPipelines
   MLIRBufferizationToMemRef
   
   MLIRSCFToControlFlow
+  MLIRSCFDialect
   MLIRMemRefToLLVM
   MLIRMathToLLVM
   MLIRArithToLLVM
