@@ -38,8 +38,8 @@
 #include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
 #include "mlir/Dialect/Vector/Transforms/Passes.h"
+#include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Pass/PassManager.h"
@@ -77,7 +77,7 @@ void addLinalgTilingPass(mlir::OpPassManager& pm)
     auto& funcPm = pm.nest<mlir::func::FuncOp>();
     funcPm.addPass(mlir::createLinalgGeneralizeNamedOpsPass());
     funcPm.addPass(mlir::createLinalgElementwiseOpFusionPass());
-    funcPm.addPass(mlir::cherry::createCherryLinalgTilingPass());
+    // funcPm.addPass(mlir::cherry::createCherryLinalgTilingPass());
 }
 
 void addLinalgVectorizationPass(mlir::OpPassManager& pm)
@@ -99,11 +99,15 @@ void addBufferizationPass(mlir::OpPassManager& pm)
 
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
 }
 
 void addLinalgToSCFPass(mlir::OpPassManager& pm)
 {
     pm.addPass(mlir::createConvertLinalgToLoopsPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createLoopInvariantCodeMotionPass());
 }
 
 void addLLVMLoweringPass(mlir::OpPassManager& pm)
@@ -112,7 +116,7 @@ void addLLVMLoweringPass(mlir::OpPassManager& pm)
     pm.addPass(mlir::createLowerAffinePass());
     // pm.addNestedPass<func::FuncOp>(createConvertVectorToSCFPass());
     // pm.addPass(mlir::createConvertVectorToLLVMPass());
-    
+
     pm.addPass(mlir::createConvertSCFToCFPass());
 
     pm.addPass(mlir::createConvertFuncToLLVMPass());

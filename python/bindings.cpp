@@ -281,7 +281,7 @@ public:
         return PyValue{op.getResult()};
     }
 
-    PyValue tensorSliceOp(PyValue input, py::list starts, std::vector<int64_t> sizes)
+    PyValue tensorSliceOp(PyValue input, py::list starts, std::vector<int64_t> sizes, bool squeeze)
     {
         auto loc       = builder->getUnknownLoc();
         auto inputType = dyn_cast<cherry::CherryTensorType>(input.value.getType());
@@ -298,8 +298,12 @@ public:
             }
         }
         auto sizesAttr = builder->getI64ArrayAttr(sizes);
-        auto op        = builder->create<cherry::TensorSliceOp>(
-            loc, this->createDynamicTensorType(elementType), input.value, startIndices, sizesAttr);
+        auto op        = builder->create<cherry::TensorSliceOp>(loc,
+                                                         this->createDynamicTensorType(elementType),
+                                                         input.value,
+                                                         startIndices,
+                                                         sizesAttr,
+                                                         squeeze);
         return PyValue{op.getResult()};
     }
 
@@ -671,7 +675,7 @@ public:
     {
         std::string              s;
         llvm::raw_string_ostream os(s);
-        mlir::OpPrintingFlags flags;
+        mlir::OpPrintingFlags    flags;
         flags.enableDebugInfo(false);
         module->print(os, flags);
         return s;

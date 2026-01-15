@@ -3,6 +3,9 @@ source_filename = "LLVMDialectModule"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
+@__constant_1x768xf32 = private constant [1 x [768 x float]] [[768 x float] [float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000, float 0x3FF19999A0000000]], align 64
+@__constant_8x8xf32 = private constant [8 x [8 x float]] [[8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000], [8 x float] [float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000, float 0x3FB99999A0000000]], align 64
+
 declare ptr @malloc(i64)
 
 declare void @printMemrefF32(i64, ptr)
@@ -14,147 +17,135 @@ define void @host() {
   %4 = urem i64 %3, 64
   %5 = sub i64 %3, %4
   %6 = inttoptr i64 %5 to ptr
-  %7 = call ptr @malloc(i64 add (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 768) to i64), i64 64))
-  %8 = ptrtoint ptr %7 to i64
-  %9 = add i64 %8, 63
-  %10 = urem i64 %9, 64
-  %11 = sub i64 %9, %10
-  %12 = inttoptr i64 %11 to ptr
-  %13 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } undef, ptr %7, 0
-  %14 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %13, ptr %12, 1
-  %15 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %14, i64 0, 2
-  %16 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %15, i64 1, 3, 0
-  %17 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %16, i64 768, 3, 1
-  %18 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %17, i64 768, 4, 0
-  %19 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %18, i64 1, 4, 1
-  br label %20
+  %7 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } undef, ptr %1, 0
+  %8 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %7, ptr %6, 1
+  %9 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %8, i64 0, 2
+  %10 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %9, i64 1, 3, 0
+  %11 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %10, i64 768, 3, 1
+  %12 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %11, i64 768, 4, 0
+  %13 = insertvalue { ptr, ptr, i64, [2 x i64], [2 x i64] } %12, i64 1, 4, 1
+  br label %14
 
-20:                                               ; preds = %39, %0
-  %21 = phi i64 [ %41, %39 ], [ 0, %0 ]
-  %22 = icmp slt i64 %21, 768
-  br i1 %22, label %23, label %42
+14:                                               ; preds = %33, %0
+  %15 = phi i64 [ %34, %33 ], [ 0, %0 ]
+  %16 = icmp slt i64 %15, 768
+  br i1 %16, label %17, label %35
 
-23:                                               ; preds = %20
-  br label %24
+17:                                               ; preds = %14
+  br label %18
 
-24:                                               ; preds = %37, %23
-  %25 = phi i64 [ %38, %37 ], [ 0, %23 ]
-  %26 = icmp slt i64 %25, 1
-  br i1 %26, label %27, label %39
+18:                                               ; preds = %31, %17
+  %19 = phi i64 [ %32, %31 ], [ 0, %17 ]
+  %20 = icmp slt i64 %19, 1
+  br i1 %20, label %21, label %33
 
-27:                                               ; preds = %24
-  br label %28
+21:                                               ; preds = %18
+  br label %22
 
-28:                                               ; preds = %31, %27
-  %29 = phi i64 [ %36, %31 ], [ 0, %27 ]
-  %30 = icmp slt i64 %29, 8
-  br i1 %30, label %31, label %37
+22:                                               ; preds = %25, %21
+  %23 = phi i64 [ %30, %25 ], [ 0, %21 ]
+  %24 = icmp slt i64 %23, 8
+  br i1 %24, label %25, label %31
 
-31:                                               ; preds = %28
-  %32 = getelementptr float, ptr %12, i64 %21
-  %33 = mul i64 %25, 768
-  %34 = add i64 %33, %29
-  %35 = getelementptr float, ptr %32, i64 %34
-  store float 0.000000e+00, ptr %35, align 4
-  %36 = add i64 %29, 1
-  br label %28
+25:                                               ; preds = %22
+  %26 = getelementptr float, ptr %6, i64 %15
+  %27 = mul i64 %19, 768
+  %28 = add i64 %27, %23
+  %29 = getelementptr float, ptr %26, i64 %28
+  store float 0.000000e+00, ptr %29, align 4
+  %30 = add i64 %23, 1
+  br label %22
 
-37:                                               ; preds = %28
-  %38 = add i64 %25, 1
-  br label %24
+31:                                               ; preds = %22
+  %32 = add i64 %19, 1
+  br label %18
 
-39:                                               ; preds = %24
-  %40 = getelementptr float, ptr %12, i64 %21
-  call void @llvm.memcpy.p0.p0.i64(ptr %40, ptr %40, i64 mul (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 1) to i64), i64 8), i1 false)
-  %41 = add i64 %21, 8
-  br label %20
+33:                                               ; preds = %18
+  %34 = add i64 %15, 8
+  br label %14
 
-42:                                               ; preds = %20
-  br label %43
+35:                                               ; preds = %14
+  br label %36
 
-43:                                               ; preds = %81, %42
-  %44 = phi i64 [ %82, %81 ], [ 0, %42 ]
-  %45 = icmp slt i64 %44, 768
-  br i1 %45, label %46, label %83
+36:                                               ; preds = %78, %35
+  %37 = phi i64 [ %79, %78 ], [ 0, %35 ]
+  %38 = icmp slt i64 %37, 768
+  br i1 %38, label %39, label %80
 
-46:                                               ; preds = %43
-  br label %47
+39:                                               ; preds = %36
+  br label %40
 
-47:                                               ; preds = %77, %46
-  %48 = phi i64 [ %80, %77 ], [ 0, %46 ]
-  %49 = icmp slt i64 %48, 768
-  br i1 %49, label %50, label %81
+40:                                               ; preds = %76, %39
+  %41 = phi i64 [ %77, %76 ], [ 0, %39 ]
+  %42 = icmp slt i64 %41, 768
+  br i1 %42, label %43, label %78
 
-50:                                               ; preds = %47
-  br label %51
+43:                                               ; preds = %40
+  br label %44
 
-51:                                               ; preds = %75, %50
-  %52 = phi i64 [ %76, %75 ], [ 0, %50 ]
-  %53 = icmp slt i64 %52, 1
-  br i1 %53, label %54, label %77
+44:                                               ; preds = %74, %43
+  %45 = phi i64 [ %75, %74 ], [ 0, %43 ]
+  %46 = icmp slt i64 %45, 1
+  br i1 %46, label %47, label %76
 
-54:                                               ; preds = %51
-  br label %55
+47:                                               ; preds = %44
+  br label %48
 
-55:                                               ; preds = %73, %54
-  %56 = phi i64 [ %74, %73 ], [ 0, %54 ]
-  %57 = icmp slt i64 %56, 8
-  br i1 %57, label %58, label %75
+48:                                               ; preds = %72, %47
+  %49 = phi i64 [ %73, %72 ], [ 0, %47 ]
+  %50 = icmp slt i64 %49, 8
+  br i1 %50, label %51, label %74
 
-58:                                               ; preds = %55
-  br label %59
+51:                                               ; preds = %48
+  br label %52
 
-59:                                               ; preds = %62, %58
-  %60 = phi i64 [ %72, %62 ], [ 0, %58 ]
-  %61 = icmp slt i64 %60, 8
-  br i1 %61, label %62, label %73
+52:                                               ; preds = %55, %51
+  %53 = phi i64 [ %71, %55 ], [ 0, %51 ]
+  %54 = icmp slt i64 %53, 8
+  br i1 %54, label %55, label %72
 
-62:                                               ; preds = %59
-  %63 = getelementptr float, ptr %12, i64 %44
-  %64 = mul i64 %52, 768
-  %65 = add i64 %64, %56
-  %66 = getelementptr float, ptr %63, i64 %65
-  %67 = load float, ptr %66, align 4
-  %68 = fadd float %67, 0x3FBC28F5E0000000
-  %69 = getelementptr float, ptr %6, i64 %48
-  %70 = add i64 %64, %60
-  %71 = getelementptr float, ptr %69, i64 %70
-  store float 0x3FF19999A0000000, ptr %71, align 4
-  store float %68, ptr %66, align 4
-  %72 = add i64 %60, 1
-  br label %59
+55:                                               ; preds = %52
+  %56 = getelementptr float, ptr @__constant_1x768xf32, i64 %41
+  %57 = mul i64 %45, 768
+  %58 = add i64 %57, %53
+  %59 = getelementptr float, ptr %56, i64 %58
+  %60 = load float, ptr %59, align 4
+  %61 = mul i64 %53, 8
+  %62 = add i64 %61, %49
+  %63 = getelementptr float, ptr @__constant_8x8xf32, i64 %62
+  %64 = load float, ptr %63, align 4
+  %65 = getelementptr float, ptr %6, i64 %37
+  %66 = add i64 %57, %49
+  %67 = getelementptr float, ptr %65, i64 %66
+  %68 = load float, ptr %67, align 4
+  %69 = fmul float %60, %64
+  %70 = fadd float %68, %69
+  store float %70, ptr %67, align 4
+  %71 = add i64 %53, 1
+  br label %52
 
-73:                                               ; preds = %59
-  %74 = add i64 %56, 1
-  br label %55
+72:                                               ; preds = %52
+  %73 = add i64 %49, 1
+  br label %48
 
-75:                                               ; preds = %55
-  %76 = add i64 %52, 1
-  br label %51
+74:                                               ; preds = %48
+  %75 = add i64 %45, 1
+  br label %44
 
-77:                                               ; preds = %51
-  %78 = getelementptr float, ptr %6, i64 %48
-  call void @llvm.memcpy.p0.p0.i64(ptr %78, ptr %78, i64 mul (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 1) to i64), i64 8), i1 false)
-  %79 = getelementptr float, ptr %12, i64 %44
-  call void @llvm.memcpy.p0.p0.i64(ptr %79, ptr %79, i64 mul (i64 ptrtoint (ptr getelementptr (float, ptr null, i32 1) to i64), i64 8), i1 false)
-  %80 = add i64 %48, 8
-  br label %47
+76:                                               ; preds = %44
+  %77 = add i64 %41, 8
+  br label %40
 
-81:                                               ; preds = %47
-  %82 = add i64 %44, 8
-  br label %43
+78:                                               ; preds = %40
+  %79 = add i64 %37, 8
+  br label %36
 
-83:                                               ; preds = %43
-  %84 = alloca { ptr, ptr, i64, [2 x i64], [2 x i64] }, i64 1, align 8
-  store { ptr, ptr, i64, [2 x i64], [2 x i64] } %19, ptr %84, align 8
-  call void @printMemrefF32(i64 2, ptr %84)
+80:                                               ; preds = %36
+  %81 = alloca { ptr, ptr, i64, [2 x i64], [2 x i64] }, i64 1, align 8
+  store { ptr, ptr, i64, [2 x i64], [2 x i64] } %13, ptr %81, align 8
+  call void @printMemrefF32(i64 2, ptr %81)
   ret void
 }
-
-; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #0
-
-attributes #0 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 
 !llvm.module.flags = !{!0}
 

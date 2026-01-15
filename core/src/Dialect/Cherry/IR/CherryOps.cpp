@@ -184,7 +184,7 @@ void FuncOp::print(mlir::OpAsmPrinter& p)
 //===----------------------------------------------------------------------===//
 void CreateTensorOp::inferShapes()
 {
-    auto value = getValue();
+    auto value      = getValue();
     auto tensorType = cast<DenseElementsAttr>(value).getType();
     getResult().setType(
         CherryTensorType::get(getContext(), tensorType.getShape(), tensorType.getElementType()));
@@ -211,20 +211,28 @@ void WeightOp::inferShapes()
 //===----------------------------------------------------------------------===//
 void TensorSliceOp::inferShapes()
 {
-    auto                 loc       = getLoc();
-    Value                input     = getInput();
-    auto                 inputType = cast<CherryTensorType>(input.getType());
-    auto                 sizesAttr = getSizesAttr();
-    int64_t              rank      = inputType.getShape().size();
+    auto  loc       = getLoc();
+    Value input     = getInput();
+    auto  inputType = cast<CherryTensorType>(input.getType());
+    auto  sizesAttr = getSizesAttr();
+    bool  squeeze   = getSqueeze();
+
     SmallVector<int64_t> outputShape;
     for (auto attr : sizesAttr) {
         auto    intAttr = dyn_cast<IntegerAttr>(attr);
         int64_t size    = intAttr.getInt();
+
+        if (squeeze && size == 1) {
+            continue;
+        }
+
         outputShape.push_back(size);
     }
+
     getResult().setType(
         CherryTensorType::get(getContext(), outputShape, inputType.getElementType()));
 }
+
 
 //===----------------------------------------------------------------------===//
 // ::mlir::cherry::TensorSetSliceOp

@@ -11,7 +11,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 BUILD_DIR="$SCRIPT_DIR/../build"
 echo -e "${BLUE} 🔨 Starting Compile core.so${NC}"
 cd "$BUILD_DIR"
-ninja cherry_py
+/home/nx/ycy/pb/mold/bin/mold -run ninja cherry
+/home/nx/ycy/pb/mold/bin/mold -run ninja cherry_py
 
 CHERRY_BIN="$BUILD_DIR/core/cherry"
 CLANG_BIN="$BUILD_DIR/third_party/llvm-project/llvm/bin/clang++"

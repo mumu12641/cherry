@@ -80,13 +80,22 @@ def Cherry_TensorSliceOp : Cherry_Op<"tensor_slice", [Pure, DeclareOpInterfaceMe
   let summary = "Extract sub-tensor slice";
   let description = [{
     Example:
-      // input: 4x5xf32
-      // starts: %i, %j (dynamic)
-      // sizes: [2, 2] (static)
-      %slice = cherry.tensor_slice %input, %i, %j sizes [2, 2]
-               : (!cherry.tensor<4x5xf32>, i64, i64) -> !cherry.tensor<2x2xf32>
+      // input: 12x768xf32
+      // sizes: [1, 768]
+      // squeeze: true (default)
+      // result: 768xf32 (1 is removed)
+      %slice = cherry.tensor_slice %input[%i, %j] sizes [1, 768]
+               : (!cherry.tensor<12x768xf32>, i64, i64) -> !cherry.tensor<768xf32>
+      
+      // If you want to keep the dimension:
+      %slice_keep = cherry.tensor_slice %input[%i, %j] sizes [1, 768] {squeeze = false}
+               : (!cherry.tensor<12x768xf32>, i64, i64) -> !cherry.tensor<1x768xf32>
   }];
-  let arguments = (ins AnyCherryTensor:$input, Variadic<I64>:$starts, I64ArrayAttr:$sizes);
+  
+  let arguments = (ins AnyCherryTensor:$input, 
+                       Variadic<I64>:$starts, 
+                       I64ArrayAttr:$sizes,
+                       DefaultValuedAttr<BoolAttr, "true">:$squeeze);
 
   let results = (outs AnyCherryTensor:$result);
 
@@ -94,6 +103,7 @@ def Cherry_TensorSliceOp : Cherry_Op<"tensor_slice", [Pure, DeclareOpInterfaceMe
     $input `[` $starts `]` `sizes`  $sizes  attr-dict `:` functional-type(operands, results)
   }];
 }
+
 
 
 def Cherry_TensorSetSliceOp : Cherry_Op<"tensor_set_slice", [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {

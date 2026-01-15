@@ -35,7 +35,7 @@ module {
     // 1. Embedding Lookup: x = token_embedding_table[token]
     // Output shape: [1, 768]
     %c0_i64 = cherry.constant (0 : i64) : i64
-    %x = cherry.tensor_slice %embedding_table[%token_id, %c0_i64] sizes [1, 768] 
+    %x = cherry.tensor_slice %embedding_table[%token_id, %c0_i64] sizes [1, 768] {squeeze = false}
          : (!cherry.cherry_tensor<[32000x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x768xf32]>
     
     %c0 = arith.constant 0 : index
@@ -141,7 +141,7 @@ module {
             // ---------------------------------------------------------
             //  Q Head [1, 64]
             // ---------------------------------------------------------
-            %q_head = cherry.tensor_slice %q[%c0_i64, %offset] sizes [1, 64]
+            %q_head = cherry.tensor_slice %q[%c0_i64, %offset] sizes [1, 64] {squeeze = false}
                 : (!cherry.cherry_tensor<[1x768xf32]>, i64, i64) -> !cherry.cherry_tensor<[1x64xf32]>
 
             // ---------------------------------------------------------

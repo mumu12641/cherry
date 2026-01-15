@@ -8,6 +8,7 @@ def ConvertCherryToLinalgPass : Pass<"convert-cherry-to-linalg", "mlir::ModuleOp
         "::mlir::cherry::CherryDialect",
         "::mlir::linalg::LinalgDialect",
         "::mlir::tensor::TensorDialect",
+        "::mlir::func::FuncDialect",
     ];
 }
 

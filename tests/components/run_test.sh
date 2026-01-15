@@ -67,9 +67,13 @@ $CLANG_BIN "$OUTPUT_LL" \
 # 5. 运行生成的可执行文件
 echo -e "\n🚀 [3/3] Running Executable..."
 echo "------------------------------------------"
+run_start=$(date +%s%N)
+
 ./"$OUTPUT_BIN"
+
+run_end=$(date +%s%N)
 echo "------------------------------------------"
-echo "✅ Test Finished."
+echo "✅ Test Finished in ${run_duration}ms."
 
 # 可选：清理中间文件 (如果需要保留，请注释掉下面这行)
 # rm "$OUTPUT_LL" "$OUTPUT_BIN"

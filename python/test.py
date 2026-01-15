@@ -35,23 +35,23 @@ def build_model():
         vocab_size = ir.constant(32000)
         valid_len = ir.scalar_add(pos, one)
 
-        x = ir.tensor_slice(embed_table, [token_id, zero], [1, 768])
+        x = ir.tensor_slice(embed_table, [token_id, zero], [1, 768], False)
 
         def layers_body(index, curr_x, curr_k_cache, curr_v_cache):
             layer = ir.index_cast(index)
 
-            rms_att_w_layer_1 = ir.tensor_slice(rms_att_w, [layer, zero], [1, 768])
-            rms_att_w_layer = ir.reshape(rms_att_w_layer_1, [768])
+            rms_att_w_layer = ir.tensor_slice(rms_att_w, [layer, zero], [1, 768], True)
+            # rms_att_w_layer = ir.reshape(rms_att_w_layer_1, [768])
             xb = ir.rmsnorm(curr_x, rms_att_w_layer, 1e-5)
 
-            wq_layer_1 = ir.tensor_slice(wq, [layer, zero, zero], [1, 768, 768])
-            wq_layer = ir.reshape(wq_layer_1, [768, 768])
+            wq_layer = ir.tensor_slice(wq, [layer, zero, zero], [1, 768, 768], True)
+            # wq_layer = ir.reshape(wq_layer_1, [768, 768])
 
-            wk_layer_1 = ir.tensor_slice(wk, [layer, zero, zero], [1, 768, 768])
-            wk_layer = ir.reshape(wk_layer_1, [768, 768])
+            wk_layer = ir.tensor_slice(wk, [layer, zero, zero], [1, 768, 768], True)
+            # wk_layer = ir.reshape(wk_layer_1, [768, 768])
 
-            wv_layer_1 = ir.tensor_slice(wv, [layer, zero, zero], [1, 768, 768])
-            wv_layer = ir.reshape(wv_layer_1, [768, 768])
+            wv_layer = ir.tensor_slice(wv, [layer, zero, zero], [1, 768, 768], True)
+            # wv_layer = ir.reshape(wv_layer_1, [768, 768])
 
             q_raw = ir.matmul(xb, wq_layer)
             k_raw = ir.matmul(xb, wk_layer)
@@ -70,14 +70,14 @@ def build_model():
             v_1 = ir.reshape(v, [1, 1, 768])
             next_v_cache = ir.tensor_set_slice(curr_v_cache, v_1, [layer, pos])
 
-            k_layer_full_1 = ir.tensor_slice(
-                next_k_cache, [layer, zero, zero], [1, 1024, 768]
+            k_layer_full = ir.tensor_slice(
+                next_k_cache, [layer, zero, zero], [1, 1024, 768], True
             )
-            k_layer_full = ir.reshape(k_layer_full_1, [1024, 768])
-            v_layer_full_1 = ir.tensor_slice(
-                next_v_cache, [layer, zero, zero], [1, 1024, 768]
+            # k_layer_full = ir.reshape(k_layer_full_1, [1024, 768])
+            v_layer_full = ir.tensor_slice(
+                next_v_cache, [layer, zero, zero], [1, 1024, 768], True
             )
-            v_layer_full = ir.reshape(v_layer_full_1, [1024, 768])
+            # v_layer_full = ir.reshape(v_layer_full_1, [1024, 768])
 
             att_out_init = ir.create_tensor([0.0], [1, 12, 64])
 
@@ -85,8 +85,10 @@ def build_model():
                 head = ir.index_cast(index)
                 offset = ir.scalar_mul(head, head_dim)
 
-                q_head = ir.tensor_slice(q, [zero, offset], [1, 64])
-                k_head = ir.tensor_slice(k_layer_full, [zero, offset], [1024, 64])
+                q_head = ir.tensor_slice(q, [zero, offset], [1, 64], False)
+                k_head = ir.tensor_slice(
+                    k_layer_full, [zero, offset], [1024, 64], False
+                )
                 k_head_T = ir.transpose(k_head, [1, 0])
                 score = ir.masked_matmul(q_head, k_head_T, valid_len)
 
@@ -94,7 +96,9 @@ def build_model():
 
                 probs = ir.softmax(score_scaled, 1)
 
-                v_head = ir.tensor_slice(v_layer_full, [zero, offset], [1024, 64])
+                v_head = ir.tensor_slice(
+                    v_layer_full, [zero, offset], [1024, 64], False
+                )
 
                 context_head = ir.matmul(probs, v_head)
                 context_head_reshape = ir.reshape(context_head, [1, 1, 64])
@@ -109,28 +113,28 @@ def build_model():
 
             att_out_final = ir.reshape(att_out_final_heads, [1, 768])
 
-            wo_layer_1 = ir.tensor_slice(wo, [layer, zero, zero], [1, 768, 768])
-            wo_layer = ir.reshape(wo_layer_1, [768, 768])
+            wo_layer = ir.tensor_slice(wo, [layer, zero, zero], [1, 768, 768], True)
+            # wo_layer = ir.reshape(wo_layer_1, [768, 768])
             xb2 = ir.matmul(att_out_final, wo_layer)
 
             x_resid_1 = ir.add(curr_x, xb2)
 
-            rms_ffn_w_layer_1 = ir.tensor_slice(rms_ffn_w, [layer, zero], [1, 768])
-            rms_ffn_w_layer = ir.reshape(rms_ffn_w_layer_1, [768])
+            rms_ffn_w_layer = ir.tensor_slice(rms_ffn_w, [layer, zero], [1, 768], True)
+            # rms_ffn_w_layer = ir.reshape(rms_ffn_w_layer_1, [768])
             xb_ffn = ir.rmsnorm(x_resid_1, rms_ffn_w_layer, 1e-5)
 
-            w1_layer_1 = ir.tensor_slice(w1, [layer, zero, zero], [1, 768, 2048])
-            w1_layer = ir.reshape(w1_layer_1, [768, 2048])
-            w3_layer_1 = ir.tensor_slice(w3, [layer, zero, zero], [1, 768, 2048])
-            w3_layer = ir.reshape(w3_layer_1, [768, 2048])
+            w1_layer = ir.tensor_slice(w1, [layer, zero, zero], [1, 768, 2048], True)
+            # w1_layer = ir.reshape(w1_layer_1, [768, 2048])
+            w3_layer = ir.tensor_slice(w3, [layer, zero, zero], [1, 768, 2048], True)
+            # w3_layer = ir.reshape(w3_layer_1, [768, 2048])
 
             hb = ir.matmul(xb_ffn, w1_layer)
             hb2 = ir.matmul(xb_ffn, w3_layer)
             hb_silu = ir.silu(hb)
             hb_mul = ir.mul(hb_silu, hb2)
 
-            w2_layer_1 = ir.tensor_slice(w2, [layer, zero, zero], [1, 2048, 768])
-            w2_layer = ir.reshape(w2_layer_1, [2048, 768])
+            w2_layer = ir.tensor_slice(w2, [layer, zero, zero], [1, 2048, 768], True)
+            # w2_layer = ir.reshape(w2_layer_1, [2048, 768])
             ffn_out = ir.matmul(hb_mul, w2_layer)
             x_next = ir.add(x_resid_1, ffn_out)
 
@@ -215,6 +219,7 @@ def body_fn(curr_token, curr_pos, curr_k, curr_v):
 
 initial_args = [start_token, start_pos, k_cache_init, v_cache_init]
 
+ir.runtime_call("start")
 results = ir.create_while_loop(initial_args, cond_fn, body_fn)
 
 final_token, final_pos, final_k, final_v = results
