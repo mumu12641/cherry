@@ -11,8 +11,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 BUILD_DIR="$SCRIPT_DIR/../build"
 echo -e "${BLUE} 🔨 Starting Compile core.so${NC}"
 cd "$BUILD_DIR"
-/home/nx/ycy/pb/mold/bin/mold -run ninja cherry
-/home/nx/ycy/pb/mold/bin/mold -run ninja cherry_py
+
+ninja cherry
+ninja cherry_py
 
 CHERRY_BIN="$BUILD_DIR/core/cherry"
 CLANG_BIN="$BUILD_DIR/third_party/llvm-project/llvm/bin/clang++"
@@ -43,7 +44,7 @@ $CLANG_BIN "$OUTPUT_LL" \
     -Wl,-rpath,"$LLVM_LIB" \
     -L"$RUNTIME_LIB" \
     -lcherry_runtime
-    
+
 echo -e "${BLUE}   -> Built executable: $OUTPUT_EXE${NC}"
 
 echo -e "${YELLOW} 🏃 Running Llama Inference...${NC}"
@@ -60,4 +61,3 @@ run_duration=$(( (run_end - run_start) / 1000000 ))
 
 echo "-----------------------------------------"
 echo -e "${BLUE}✅ Done! Execution finished in ${run_duration}ms.${NC}"
-

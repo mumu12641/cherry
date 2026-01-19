@@ -155,9 +155,9 @@ vocab_size = ir.constant(32000)
 ir.runtime_call(
     "build_tokenizer",
     vocab_size,
-    str_args=["/home/nx/ycy/pb/cherry/tests/llama/tokenizer.bin"],
+    str_args=["../utils/stories110M/tokenizer.bin"],
 )
-base_dir = "/home/nx/ycy/pb/cherry/utils/stories110M/"
+base_dir = "../utils/stories110M/"
 
 embedding = ir.load_weight(base_dir + "token_embeddings.bin", [32000, 768], "f32")
 rms_att = ir.load_weight(base_dir + "layers_rms_att_weight.bin", [12, 768], "f32")
