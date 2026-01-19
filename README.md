@@ -28,7 +28,7 @@ Ensure `CMake`, and `Ninja` are installed in your environment.
 ```bash
 git clone https://github.com/mumu12641/cherry
 cd cherry
-git submodule update --init --recursive --depth 1
+git clone --depth 1 -b llvmorg-19.1.7 https://github.com/llvm/llvm-project.git third_party/llvm-project
 
 mkdir build && cd build
 # Generate build files
