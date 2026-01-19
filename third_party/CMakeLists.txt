@@ -1,3 +1,5 @@
 set(LLVM_ENABLE_PROJECTS "mlir;clang" CACHE STRING " " FORCE) 
 set(LLVM_TARGETS_TO_BUILD "Native;NVPTX" CACHE STRING " " FORCE) 
+set(MLIR_ENABLE_CUDA_RUNNER ON CACHE BOOL "Enable CUDA runner" FORCE)
+set(MLIR_ENABLE_CUDA_CONVERSIONS ON CACHE BOOL "Enable CUDA conversions" FORCE)
 add_subdirectory(llvm-project/llvm)

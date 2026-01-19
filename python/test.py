@@ -177,7 +177,7 @@ v_cache_init = ir.create_tensor([0.0], [12, 1024, 768])
 
 start_token = ir.constant(1)
 start_pos = ir.constant(0)
-max_len = ir.constant(30)
+max_len = ir.constant(128)
 
 
 def cond_fn(curr_token, curr_pos, curr_k, curr_v):
@@ -226,5 +226,5 @@ final_token, final_pos, final_k, final_v = results
 ir.runtime_call("end", max_len)
 ir.runtime_call("free_tokenizer")
 ir.ret([])
-print(ir.dump())
+# print(ir.dump())
 ir.dump_to_file("test.mlir")

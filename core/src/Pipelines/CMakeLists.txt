@@ -3,10 +3,11 @@ add_mlir_library(CherryPipelines
   
   DEPENDS
   LINK_LIBS PUBLIC
-  
+  CherryUtils
   CherryDialect 
   CherryPasses
   CherryToLinalg
+  CherryGPU
   MLIRFuncAllExtensions
   
   MLIRLinalgTransforms

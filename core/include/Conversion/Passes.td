@@ -21,11 +21,11 @@ def CherryLinalgTilingPass : Pass<"cherry-linalg-tiling", "mlir::func::FuncOp">{
     ];
     
     let options = [
-        Option<"tileSize", "tile-size", "int64_t", /*default=*/"8", 
+        Option<"tileSize", "tile-size", "int64_t", /*default=*/"32", 
                "Tile size for linalg operations">,
-        Option<"outerTileSize", "outer-tile-size", "int64_t", /*default=*/"64", 
+        Option<"outerTileSize", "outer-tile-size", "int64_t", /*default=*/"128", 
                "Outer tile size for linalg operations">,
-        Option<"hierarchical", "hierarchical", "bool", /*default=*/"false", 
+        Option<"hierarchical", "hierarchical", "bool", /*default=*/"true", 
                "Enable hierarchical tiling">,
         Option<"parallelLoops", "parallel-loops", "bool", /*default=*/"false", 
                "Enable parallel loops">
@@ -41,5 +41,12 @@ def CherryLinalgVectorizationPass : Pass<"cherry-linalg-vectorization", "mlir::f
     ];
 }
 
+def CherryInsertHostRegisterPass : Pass<"cherry-insert-host-register", "mlir::func::FuncOp">{
+    let summary = "Insert Host Register Pass";
+    let dependentDialects = [
+        "::mlir::gpu::GPUDialect",
+        "::mlir::func::FuncDialect",
+    ];
+}
 
 #endif

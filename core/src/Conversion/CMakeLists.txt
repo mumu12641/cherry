@@ -1,1 +1,2 @@
 add_subdirectory(CherryToLinalg)
+add_subdirectory(GPU)

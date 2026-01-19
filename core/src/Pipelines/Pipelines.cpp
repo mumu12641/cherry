@@ -7,6 +7,7 @@
 #include "Dialect/Cherry/IR/CherryOps.h"
 #include "Dialect/Cherry/IR/CherryTypes.h"
 #include "Dialect/Cherry/Transforms/Passes.h"
+#include "Utils/Cache.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
@@ -74,10 +75,15 @@ void addLinalgConversionPass(mlir::OpPassManager& pm)
 
 void addLinalgTilingPass(mlir::OpPassManager& pm)
 {
-    auto& funcPm = pm.nest<mlir::func::FuncOp>();
+    auto&             funcPm = pm.nest<mlir::func::FuncOp>();
+    cherry::CacheInfo info;
+    auto [l1_tile, l2_tile] = info.computeMatmulTileSizes(4);
+    // funcPm.addPass(mlir::createLinalgElementwiseOpFusionPass());
     funcPm.addPass(mlir::createLinalgGeneralizeNamedOpsPass());
-    funcPm.addPass(mlir::createLinalgElementwiseOpFusionPass());
-    // funcPm.addPass(mlir::cherry::createCherryLinalgTilingPass());
+    // funcPm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+    funcPm.addPass(mlir::cherry::createCherryLinalgTilingPass(
+        cherry::CherryLinalgTilingPassOptions{l1_tile, l2_tile, true, false}));
+
 }
 
 void addLinalgVectorizationPass(mlir::OpPassManager& pm)

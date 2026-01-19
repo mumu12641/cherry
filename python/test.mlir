@@ -98,7 +98,7 @@
     %14 = "cherry.create_tensor"() <{value = dense<0.000000e+00> : tensor<12x1024x768xf32>}> : () -> !cherry.cherry_tensor<[?xf32]>
     %15 = "cherry.constant"() <{value = 1 : i64}> : () -> i64
     %16 = "cherry.constant"() <{value = 0 : i64}> : () -> i64
-    %17 = "cherry.constant"() <{value = 30 : i64}> : () -> i64
+    %17 = "cherry.constant"() <{value = 128 : i64}> : () -> i64
     "cherry.runtime_call"() <{callee = "start"}> : () -> ()
     %18:4 = "scf.while"(%15, %16, %13, %14) ({
     ^bb0(%arg4: i64, %arg5: i64, %arg6: !cherry.cherry_tensor<[?xf32]>, %arg7: !cherry.cherry_tensor<[?xf32]>):

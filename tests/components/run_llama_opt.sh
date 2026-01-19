@@ -1,4 +1,5 @@
 #!/bin/bash
+export PATH=$PATH:/home/nx/ycy/pb/cherry/build/core/src/Tools:/home/nx/ycy/pb/cherry/build/core:/home/nx/ycy/pb/cherry/build/third_party/llvm-project/llvm/bin
 cherry-opt \
 ./test_llama.mlir \
 --cherry-lowering-pipeline \

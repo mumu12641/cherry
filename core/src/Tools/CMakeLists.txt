@@ -19,6 +19,7 @@ set(LIBS
   CherryDialect
   CherryPipelines
   CherryToLinalg
+  CherryGPU
   CherryDialectInterfaces
   CherryPasses
   MLIRCAPIDebug

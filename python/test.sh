@@ -37,7 +37,7 @@ echo -e "${YELLOW} 🔧 Compiling and Linking with Clang++...${NC}"
 
 $CLANG_BIN "$OUTPUT_LL" \
     -o "$OUTPUT_EXE" \
-    -O3 \
+    -O3 -ffast-math \
     -L"$LLVM_LIB" \
     -lmlir_c_runner_utils -lmlir_runner_utils \
     -Wl,-rpath,"$LLVM_LIB" \
