@@ -12,6 +12,10 @@
 </p>
 </div>
 
+## 🔍 Demo
+
+<a href="https://asciinema.org/a/769592?autoplay=1"><img src="https://asciinema.org/a/769592.svg" alt="cherry demo" width="100%" /></a>
+
 ## ✨ Features
 
 *   **🛠️ Custom IR**: Implemented custom Dialects and Types.
@@ -67,5 +71,7 @@ Use the Python script to load the compiled operators and weights for inference.
 
 ```bash
 cd python
-python test.py
+chmod +x ./test.sh
+# Here uses $BUILD_DIR/third_party/llvm-project/llvm/bin/clang++, you can perhaps replace it with your own clang++.
+./test.sh
 ```

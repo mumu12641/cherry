@@ -73,7 +73,7 @@ int main(int argc, char** argv)
     // ============================================================
     // Running Cherry Optimization Pipeline
     // ============================================================
-    llvm::outs() << "⚙️  Running Cherry Optimization Pipeline...\n";
+    llvm::outs() << "⚙️ Running Cherry Optimization Pipeline...\n";
 
     mlir::PassManager pm(&context);
     pm.enableVerifier();

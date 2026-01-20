@@ -50,13 +50,11 @@ echo -e "${BLUE}   -> Built executable: $OUTPUT_EXE${NC}"
 echo -e "${YELLOW} 🏃 Running Llama Inference...${NC}"
 echo "-----------------------------------------"
 
-# 记录运行开始时间
 run_start=$(date +%s%N)
 
 ./"$OUTPUT_EXE"
 
 run_end=$(date +%s%N)
-# 计算毫秒
 run_duration=$(( (run_end - run_start) / 1000000 ))
 
 echo "-----------------------------------------"

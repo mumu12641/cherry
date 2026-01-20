@@ -22,3 +22,5 @@ python/cherry/__pycache__
 python/__pycache__
 python/cherry/*.so
 python/*.out
+python/*.ll
+python/*.mlir
