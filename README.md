@@ -14,7 +14,7 @@
 
 ## 🔍 Demo
 
-<a href="https://asciinema.org/a/769592?autoplay=1"><img src="https://asciinema.org/a/769592.svg" alt="cherry demo" width="100%" /></a>
+<a href="https://asciinema.org/a/769592"><img src="https://asciinema.org/a/769592.svg" alt="cherry demo" width="100%" /></a>
 
 ## ✨ Features
 
